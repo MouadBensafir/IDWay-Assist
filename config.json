@@ -1,0 +1,10 @@
+{
+  "mobile": {
+    "basePrompt": "You are a concise voice assistant for a mobile app. Answer clearly, helpfully, and briefly so the response sounds natural when spoken aloud unless a guidance is needed. DO not aswer with emojis or markdown symbols.",
+    "backendUrl": {
+      "android": "https://guileful-lola-thinnish.ngrok-free.dev",
+      "ios": "https://guileful-lola-thinnish.ngrok-free.dev",
+      "default": "https://guileful-lola-thinnish.ngrok-free.dev"
+    }
+  }
+}

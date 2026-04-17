@@ -1,0 +1,488 @@
+[
+  {
+    "id": 1001,
+    "code": "CASABLANCA",
+    "name": "Casablanca",
+    "codeParent": "MAR-CS"
+  },
+  {
+    "id": 1002,
+    "code": "MOHAMMEDIA",
+    "name": "Mohammedia",
+    "codeParent": "MAR-CS"
+  },
+  {
+    "id": 1003,
+    "code": "EL-JADIDA",
+    "name": "El Jadida",
+    "codeParent": "MAR-CS"
+  },
+  {
+    "id": 1004,
+    "code": "SETTAT",
+    "name": "Settat",
+    "codeParent": "MAR-CS"
+  },
+  {
+    "id": 1005,
+    "code": "BENSLIMANE",
+    "name": "Benslimane",
+    "codeParent": "MAR-CS"
+  },
+  {
+    "id": 1006,
+    "code": "BERRECHID",
+    "name": "Berrechid",
+    "codeParent": "MAR-CS"
+  },
+  {
+    "id": 1101,
+    "code": "RABAT",
+    "name": "Rabat",
+    "codeParent": "MAR-RSK"
+  },
+  {
+    "id": 1102,
+    "code": "SALE",
+    "name": "Sale",
+    "codeParent": "MAR-RSK"
+  },
+  {
+    "id": 1103,
+    "code": "KENITRA",
+    "name": "Kenitra",
+    "codeParent": "MAR-RSK"
+  },
+  {
+    "id": 1104,
+    "code": "TEMARA",
+    "name": "Temara",
+    "codeParent": "MAR-RSK"
+  },
+  {
+    "id": 1105,
+    "code": "SKHIRAT",
+    "name": "Skhirat",
+    "codeParent": "MAR-RSK"
+  },
+  {
+    "id": 1106,
+    "code": "SIDI-KACEM",
+    "name": "Sidi Kacem",
+    "codeParent": "MAR-RSK"
+  },
+  {
+    "id": 1201,
+    "code": "MARRAKECH",
+    "name": "Marrakech",
+    "codeParent": "MAR-MS"
+  },
+  {
+    "id": 1202,
+    "code": "SAFI",
+    "name": "Safi",
+    "codeParent": "MAR-MS"
+  },
+  {
+    "id": 1203,
+    "code": "ESSAOUIRA",
+    "name": "Essaouira",
+    "codeParent": "MAR-MS"
+  },
+  {
+    "id": 1204,
+    "code": "EL-KELAA-DES-SRAGHNA",
+    "name": "El Kelaa des Sraghna",
+    "codeParent": "MAR-MS"
+  },
+  {
+    "id": 1205,
+    "code": "YOUSSOUFIA",
+    "name": "Youssoufia",
+    "codeParent": "MAR-MS"
+  },
+  {
+    "id": 1206,
+    "code": "CHICHAOUA",
+    "name": "Chichaoua",
+    "codeParent": "MAR-MS"
+  },
+  {
+    "id": 1301,
+    "code": "FES",
+    "name": "Fes",
+    "codeParent": "MAR-FM"
+  },
+  {
+    "id": 1302,
+    "code": "MEKNES",
+    "name": "Meknes",
+    "codeParent": "MAR-FM"
+  },
+  {
+    "id": 1303,
+    "code": "TAZA",
+    "name": "Taza",
+    "codeParent": "MAR-FM"
+  },
+  {
+    "id": 1304,
+    "code": "IFRANE",
+    "name": "Ifrane",
+    "codeParent": "MAR-FM"
+  },
+  {
+    "id": 1305,
+    "code": "SEFROU",
+    "name": "Sefrou",
+    "codeParent": "MAR-FM"
+  },
+  {
+    "id": 1306,
+    "code": "AZROU",
+    "name": "Azrou",
+    "codeParent": "MAR-FM"
+  },
+  {
+    "id": 1401,
+    "code": "TANGIER",
+    "name": "Tangier",
+    "codeParent": "MAR-TTA"
+  },
+  {
+    "id": 1402,
+    "code": "TETOUAN",
+    "name": "Tetouan",
+    "codeParent": "MAR-TTA"
+  },
+  {
+    "id": 1403,
+    "code": "AL-HOCEIMA",
+    "name": "Al Hoceima",
+    "codeParent": "MAR-TTA"
+  },
+  {
+    "id": 1404,
+    "code": "LARACHE",
+    "name": "Larache",
+    "codeParent": "MAR-TTA"
+  },
+  {
+    "id": 1405,
+    "code": "CHEFCHAOUEN",
+    "name": "Chefchaouen",
+    "codeParent": "MAR-TTA"
+  },
+  {
+    "id": 1406,
+    "code": "ASILAH",
+    "name": "Asilah",
+    "codeParent": "MAR-TTA"
+  },
+  {
+    "id": 1501,
+    "code": "AGADIR",
+    "name": "Agadir",
+    "codeParent": "MAR-SM"
+  },
+  {
+    "id": 1502,
+    "code": "INEZGANE",
+    "name": "Inezgane",
+    "codeParent": "MAR-SM"
+  },
+  {
+    "id": 1503,
+    "code": "TAROUDANT",
+    "name": "Taroudant",
+    "codeParent": "MAR-SM"
+  },
+  {
+    "id": 1504,
+    "code": "TIZNIT",
+    "name": "Tiznit",
+    "codeParent": "MAR-SM"
+  },
+  {
+    "id": 1505,
+    "code": "TATA",
+    "name": "Tata",
+    "codeParent": "MAR-SM"
+  },
+  {
+    "id": 1506,
+    "code": "BIOUGRA",
+    "name": "Biougra",
+    "codeParent": "MAR-SM"
+  },
+  {
+    "id": 2001,
+    "code": "PARIS",
+    "name": "Paris",
+    "codeParent": "FRA-IDF"
+  },
+  {
+    "id": 2002,
+    "code": "BOULOGNE-BILLANCOURT",
+    "name": "Boulogne-Billancourt",
+    "codeParent": "FRA-IDF"
+  },
+  {
+    "id": 2003,
+    "code": "SAINT-DENIS",
+    "name": "Saint-Denis",
+    "codeParent": "FRA-IDF"
+  },
+  {
+    "id": 2101,
+    "code": "MARSEILLE",
+    "name": "Marseille",
+    "codeParent": "FRA-PACA"
+  },
+  {
+    "id": 2102,
+    "code": "NICE",
+    "name": "Nice",
+    "codeParent": "FRA-PACA"
+  },
+  {
+    "id": 2103,
+    "code": "TOULON",
+    "name": "Toulon",
+    "codeParent": "FRA-PACA"
+  },
+  {
+    "id": 2201,
+    "code": "LYON",
+    "name": "Lyon",
+    "codeParent": "FRA-ARA"
+  },
+  {
+    "id": 2202,
+    "code": "GRENOBLE",
+    "name": "Grenoble",
+    "codeParent": "FRA-ARA"
+  },
+  {
+    "id": 2203,
+    "code": "ANNECY",
+    "name": "Annecy",
+    "codeParent": "FRA-ARA"
+  },
+  {
+    "id": 3001,
+    "code": "MADRID",
+    "name": "Madrid",
+    "codeParent": "ESP-MD"
+  },
+  {
+    "id": 3002,
+    "code": "ALCALA-DE-HENARES",
+    "name": "Alcala de Henares",
+    "codeParent": "ESP-MD"
+  },
+  {
+    "id": 3003,
+    "code": "MOSTOLES",
+    "name": "Mostoles",
+    "codeParent": "ESP-MD"
+  },
+  {
+    "id": 3101,
+    "code": "BARCELONA",
+    "name": "Barcelona",
+    "codeParent": "ESP-CT"
+  },
+  {
+    "id": 3102,
+    "code": "GIRONA",
+    "name": "Girona",
+    "codeParent": "ESP-CT"
+  },
+  {
+    "id": 3103,
+    "code": "TARRAGONA",
+    "name": "Tarragona",
+    "codeParent": "ESP-CT"
+  },
+  {
+    "id": 3201,
+    "code": "SEVILLE",
+    "name": "Seville",
+    "codeParent": "ESP-AN"
+  },
+  {
+    "id": 3202,
+    "code": "MALAGA",
+    "name": "Malaga",
+    "codeParent": "ESP-AN"
+  },
+  {
+    "id": 3203,
+    "code": "GRANADA",
+    "name": "Granada",
+    "codeParent": "ESP-AN"
+  },
+  {
+    "id": 4001,
+    "code": "BRUSSELS",
+    "name": "Brussels",
+    "codeParent": "BEL-BRU"
+  },
+  {
+    "id": 4002,
+    "code": "SCHAERBEEK",
+    "name": "Schaerbeek",
+    "codeParent": "BEL-BRU"
+  },
+  {
+    "id": 4003,
+    "code": "IXELLES",
+    "name": "Ixelles",
+    "codeParent": "BEL-BRU"
+  },
+  {
+    "id": 4101,
+    "code": "ANTWERP",
+    "name": "Antwerp",
+    "codeParent": "BEL-VAN"
+  },
+  {
+    "id": 4102,
+    "code": "MECHELEN",
+    "name": "Mechelen",
+    "codeParent": "BEL-VAN"
+  },
+  {
+    "id": 4103,
+    "code": "LIER",
+    "name": "Lier",
+    "codeParent": "BEL-VAN"
+  },
+  {
+    "id": 4201,
+    "code": "LEUVEN",
+    "name": "Leuven",
+    "codeParent": "BEL-VBR"
+  },
+  {
+    "id": 4202,
+    "code": "HALLE",
+    "name": "Halle",
+    "codeParent": "BEL-VBR"
+  },
+  {
+    "id": 4203,
+    "code": "VILVOORDE",
+    "name": "Vilvoorde",
+    "codeParent": "BEL-VBR"
+  },
+  {
+    "id": 5001,
+    "code": "MONTREAL",
+    "name": "Montreal",
+    "codeParent": "CAN-QC"
+  },
+  {
+    "id": 5002,
+    "code": "QUEBEC-CITY",
+    "name": "Quebec City",
+    "codeParent": "CAN-QC"
+  },
+  {
+    "id": 5003,
+    "code": "LAVAL",
+    "name": "Laval",
+    "codeParent": "CAN-QC"
+  },
+  {
+    "id": 5101,
+    "code": "TORONTO",
+    "name": "Toronto",
+    "codeParent": "CAN-ON"
+  },
+  {
+    "id": 5102,
+    "code": "OTTAWA",
+    "name": "Ottawa",
+    "codeParent": "CAN-ON"
+  },
+  {
+    "id": 5103,
+    "code": "MISSISSAUGA",
+    "name": "Mississauga",
+    "codeParent": "CAN-ON"
+  },
+  {
+    "id": 5201,
+    "code": "VANCOUVER",
+    "name": "Vancouver",
+    "codeParent": "CAN-BC"
+  },
+  {
+    "id": 5202,
+    "code": "VICTORIA",
+    "name": "Victoria",
+    "codeParent": "CAN-BC"
+  },
+  {
+    "id": 5203,
+    "code": "SURREY",
+    "name": "Surrey",
+    "codeParent": "CAN-BC"
+  },
+  {
+    "id": 6001,
+    "code": "DAKAR",
+    "name": "Dakar",
+    "codeParent": "SEN-DK"
+  },
+  {
+    "id": 6002,
+    "code": "PIKINE",
+    "name": "Pikine",
+    "codeParent": "SEN-DK"
+  },
+  {
+    "id": 6003,
+    "code": "GUEDIAWAYE",
+    "name": "Guediawaye",
+    "codeParent": "SEN-DK"
+  },
+  {
+    "id": 6101,
+    "code": "THIES",
+    "name": "Thies",
+    "codeParent": "SEN-TH"
+  },
+  {
+    "id": 6102,
+    "code": "MBOUR",
+    "name": "Mbour",
+    "codeParent": "SEN-TH"
+  },
+  {
+    "id": 6103,
+    "code": "TIVAOUANE",
+    "name": "Tivaouane",
+    "codeParent": "SEN-TH"
+  },
+  {
+    "id": 6201,
+    "code": "SAINT-LOUIS",
+    "name": "Saint-Louis",
+    "codeParent": "SEN-ST"
+  },
+  {
+    "id": 6202,
+    "code": "RICHARD-TOLL",
+    "name": "Richard-Toll",
+    "codeParent": "SEN-ST"
+  },
+  {
+    "id": 6203,
+    "code": "DAGANA",
+    "name": "Dagana",
+    "codeParent": "SEN-ST"
+  }
+]

@@ -1,0 +1,128 @@
+[
+  {
+    "id": 101,
+    "code": "MAR-CS",
+    "name": "Casablanca-Settat",
+    "codeParent": "MAR"
+  },
+  {
+    "id": 102,
+    "code": "MAR-RSK",
+    "name": "Rabat-Sale-Kenitra",
+    "codeParent": "MAR"
+  },
+  {
+    "id": 103,
+    "code": "MAR-MS",
+    "name": "Marrakech-Safi",
+    "codeParent": "MAR"
+  },
+  {
+    "id": 104,
+    "code": "MAR-FM",
+    "name": "Fes-Meknes",
+    "codeParent": "MAR"
+  },
+  {
+    "id": 105,
+    "code": "MAR-TTA",
+    "name": "Tangier-Tetouan-Al Hoceima",
+    "codeParent": "MAR"
+  },
+  {
+    "id": 106,
+    "code": "MAR-SM",
+    "name": "Souss-Massa",
+    "codeParent": "MAR"
+  },
+  {
+    "id": 201,
+    "code": "FRA-IDF",
+    "name": "Ile-de-France",
+    "codeParent": "FRA"
+  },
+  {
+    "id": 202,
+    "code": "FRA-PACA",
+    "name": "Provence-Alpes-Cote d'Azur",
+    "codeParent": "FRA"
+  },
+  {
+    "id": 203,
+    "code": "FRA-ARA",
+    "name": "Auvergne-Rhone-Alpes",
+    "codeParent": "FRA"
+  },
+  {
+    "id": 301,
+    "code": "ESP-MD",
+    "name": "Community of Madrid",
+    "codeParent": "ESP"
+  },
+  {
+    "id": 302,
+    "code": "ESP-CT",
+    "name": "Catalonia",
+    "codeParent": "ESP"
+  },
+  {
+    "id": 303,
+    "code": "ESP-AN",
+    "name": "Andalusia",
+    "codeParent": "ESP"
+  },
+  {
+    "id": 401,
+    "code": "BEL-BRU",
+    "name": "Brussels-Capital Region",
+    "codeParent": "BEL"
+  },
+  {
+    "id": 402,
+    "code": "BEL-VAN",
+    "name": "Antwerp Province",
+    "codeParent": "BEL"
+  },
+  {
+    "id": 403,
+    "code": "BEL-VBR",
+    "name": "Flemish Brabant",
+    "codeParent": "BEL"
+  },
+  {
+    "id": 501,
+    "code": "CAN-QC",
+    "name": "Quebec",
+    "codeParent": "CAN"
+  },
+  {
+    "id": 502,
+    "code": "CAN-ON",
+    "name": "Ontario",
+    "codeParent": "CAN"
+  },
+  {
+    "id": 503,
+    "code": "CAN-BC",
+    "name": "British Columbia",
+    "codeParent": "CAN"
+  },
+  {
+    "id": 601,
+    "code": "SEN-DK",
+    "name": "Dakar",
+    "codeParent": "SEN"
+  },
+  {
+    "id": 602,
+    "code": "SEN-TH",
+    "name": "Thies",
+    "codeParent": "SEN"
+  },
+  {
+    "id": 603,
+    "code": "SEN-ST",
+    "name": "Saint-Louis",
+    "codeParent": "SEN"
+  }
+]

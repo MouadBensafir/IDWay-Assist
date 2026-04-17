@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "code": "MAR",
+    "name": "Morocco"
+  },
+  {
+    "id": 2,
+    "code": "FRA",
+    "name": "France"
+  },
+  {
+    "id": 3,
+    "code": "ESP",
+    "name": "Spain"
+  },
+  {
+    "id": 4,
+    "code": "BEL",
+    "name": "Belgium"
+  },
+  {
+    "id": 5,
+    "code": "CAN",
+    "name": "Canada"
+  },
+  {
+    "id": 6,
+    "code": "SEN",
+    "name": "Senegal"
+  },
+  {
+    "id": 7,
+    "code": "DEU",
+    "name": "Germany"
+  },
+  {
+    "id": 8,
+    "code": "PRT",
+    "name": "Portugal"
+  }
+]

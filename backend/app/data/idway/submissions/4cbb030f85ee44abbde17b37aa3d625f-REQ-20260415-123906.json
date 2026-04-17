@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-04-15T12:39:06.568002+00:00",
+  "referenceNumber": "REQ-20260415-123906",
+  "serviceCode": "ai-id-renewal",
+  "message": "Your request has been successfully submitted.",
+  "user": {
+    "uin": "BE92654",
+    "firstName": "John",
+    "lastName": "Anderson",
+    "birthDate": "2005-09-01"
+  },
+  "formData": {
+    "uin": "BE92654",
+    "firstName": "John",
+    "lastName": "Anderson",
+    "birthDate": "2005-09-0"
+  },
+  "appointment": {
+    "countryCode": null,
+    "countryName": null,
+    "regionCode": null,
+    "regionName": null,
+    "townCode": null,
+    "townName": null,
+    "enrollmentCenterCode": "CA10234",
+    "enrollmentCenterName": null,
+    "date": "2026-03-23",
+    "time": "08:00:00"
+  },
+  "submittedPayload": {
+    "birthDate": "2005-09-01",
+    "date": "2026-03-23",
+    "enrollmentCenterCode": "CA10234",
+    "firstName": "John",
+    "lastName": "Anderson",
+    "time": "08:00:00",
+    "uin": "BE92654"
+  }
+}

@@ -1,0 +1,48 @@
+[
+  {
+    "id": 58,
+    "name": "eservice.scolarship.label",
+    "code": "scolarship"
+  },
+  {
+    "id": 60,
+    "name": "eservice.mobidreq.label",
+    "code": "mobidreq",
+    "enabled": true
+  },
+  {
+    "id": 62,
+    "name": "eservice.housing.label",
+    "code": "housing"
+  },
+  {
+    "id": 63,
+    "name": "eservice.mobidcard.label",
+    "code": "mobidcard"
+  },
+  {
+    "id": 64,
+    "name": "eservice.studyenroll.label",
+    "code": "studyenroll"
+  },
+  {
+    "id": 66,
+    "name": "eservice.birthcertif.label",
+    "code": "birthcertif"
+  },
+  {
+    "id": 109,
+    "name": "eservice.technolab.label",
+    "code": "technolab"
+  },
+  {
+    "id": 110,
+    "name": "eservice.ai-pass-renewal.label",
+    "code": "ai-pass-renewal"
+  },
+  {
+    "id": 114,
+    "name": "eservice.ai-id-renewal.label",
+    "code": "ai-id-renewal"
+  }
+]

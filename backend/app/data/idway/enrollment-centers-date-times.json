@@ -1,0 +1,127 @@
+[
+    {
+      "name": "08:00",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:01",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:02",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:03",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:04",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:05",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:06",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:07",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:08",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:09",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:10",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:11",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:12",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:13",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:14",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:15",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:16",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:17",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:18",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:19",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:20",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:21",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:22",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:23",
+      "status": true,
+      "capacity": 1
+    },
+    {
+      "name": "08:24",
+      "status": true,
+      "capacity": 1
+    }
+  ]

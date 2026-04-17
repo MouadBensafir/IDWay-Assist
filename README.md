@@ -1,50 +1,59 @@
-# Welcome to your Expo app 👋
+# Local Qwen Voice App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This project records speech in the Expo app, sends the final transcript to a separate FastAPI backend project, forwards that prompt to Ollama running Qwen on your machine through the Python `ollama` library, and then speaks Qwen's reply back to the user.
 
-## Get started
+The mobile app URL defaults live in [config.json](/abs/path/c:/Users/Mouad/Desktop/Expo_Test/config.json). The backend project has its own config in [backend/config.json](/abs/path/c:/Users/Mouad/Desktop/Expo_Test/backend/config.json).
 
-1. Install dependencies
+## Backend
 
-   ```bash
-   npm install
-   ```
+The backend is a separate project under [backend/README.md](/abs/path/c:/Users/Mouad/Desktop/Expo_Test/backend/README.md).
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Install Python dependencies inside `backend/`:
 
 ```bash
-npm run reset-project
+cd backend
+pip install -r requirements.txt
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Run the API from `backend/`:
 
-## Learn more
+```bash
+python run.py
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Default backend settings come from `backend/config.json`. Optional environment variables still override them:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+set OLLAMA_MODEL=qwen2.5:latest
+set OLLAMA_URL=http://127.0.0.1:11434
+set OLLAMA_NUM_CTX=4096
+```
 
-## Join the community
+The backend exposes:
 
-Join our community of developers creating universal apps.
+- `GET /health`
+- `POST /chat` with `{ "prompt": "..." }`
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Mobile app
+
+Install dependencies and start Expo:
+
+```bash
+npm install
+npx expo start
+```
+
+Mobile backend URL defaults come from `config.json`:
+
+- `mobile.basePrompt`
+- `mobile.backendUrl.android`
+- `mobile.backendUrl.ios`
+- `mobile.backendUrl.default`
+
+If you want to override that temporarily, set `EXPO_PUBLIC_API_URL`, for example:
+
+```bash
+set EXPO_PUBLIC_API_URL=http://192.168.1.10:8000
+```
+
+Make sure Ollama is running locally and the configured Qwen model is already pulled before using the app.

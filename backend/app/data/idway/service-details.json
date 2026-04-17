@@ -1,0 +1,56 @@
+[
+    {
+      "id": 114,
+      "name": "eservice.ai-id-renewal.label",
+      "code": "ai-id-renewal",
+      "description": "eservice.ai-id-renewal.description",
+      "eserviceAttributes": [
+        {
+          "key": "payment.amount",
+          "value": "NOT_SET"
+        },
+        {
+          "key": "iodc.mapping",
+          "value": "firstName,firstName;lastName,lastName;birthDate,dateOfBirth"
+        },
+        {
+          "key": "id.proofing.type",
+          "value": "NOT_SET"
+        },
+        {
+          "key": "id.proofing.document.type",
+          "value": "NOT_SET"
+        }
+      ],
+      "stepDetailDtos": [
+        {
+          "id": 471,
+          "name": "Form",
+          "path": "/request-form",
+          "order": 3,
+          "requireMobileApp": false
+        },
+        {
+          "id": 478,
+          "name": "Consent",
+          "path": "/user-consent",
+          "order": 1,
+          "requireMobileApp": false
+        },
+        {
+            "id": 479,
+            "name": "Appointment",
+            "path": "/appointment",
+            "order": 2,
+            "requireMobileApp": false
+          },
+        {
+          "id": 473,
+          "name": "Summary",
+          "path": "/request-summary",
+          "order": 4,
+          "requireMobileApp": false
+        }
+      ]
+    }
+  ]

@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "code": "CA10234",
+    "name": "Casablanca Anfa Identity Services Center",
+    "email": "casablanca.anfa@idway.ma",
+    "phone": "+212522203410",
+    "address": "12 Boulevard d'Anfa, Casablanca",
+    "enabled": true,
+    "longitude": "-7.632614",
+    "latitude": "33.589886",
+    "description": "High-capacity urban enrollment center serving central Casablanca and Maarif."
+  },
+  {
+    "id": 2,
+    "code": "CM18425",
+    "name": "Casablanca Maarif Biometric Enrollment Office",
+    "email": "casablanca.maarif@idway.ma",
+    "phone": "+212522986140",
+    "address": "145 Boulevard Bir Anzarane, Casablanca",
+    "enabled": true,
+    "longitude": "-7.620028",
+    "latitude": "33.573110",
+    "description": "Biometric capture site for first-time issuance and renewal appointments."
+  },
+  {
+    "id": 3,
+    "code": "RB24518",
+    "name": "Rabat Hassan Citizen Services Center",
+    "email": "rabat.hassan@idway.ma",
+    "phone": "+212537721660",
+    "address": "8 Avenue Mohammed V, Rabat",
+    "enabled": true,
+    "longitude": "-6.832550",
+    "latitude": "34.020882",
+    "description": "Primary appointment center for Rabat residents, close to administrative offices."
+  },
+  {
+    "id": 4,
+    "code": "SL32871",
+    "name": "Sale Tabriquet Registration Office",
+    "email": "sale.tabriquet@idway.ma",
+    "phone": "+212537882430",
+    "address": "37 Avenue Allal Ben Abdellah, Sale",
+    "enabled": true,
+    "longitude": "-6.798463",
+    "latitude": "34.037206",
+    "description": "Regional registration office supporting identity renewal and document pickup."
+  },
+  {
+    "id": 5,
+    "code": "MK40216",
+    "name": "Marrakech Gueliz Identity Center",
+    "email": "marrakech.gueliz@idway.ma",
+    "phone": "+212524436520",
+    "address": "24 Avenue Mohammed V, Marrakech",
+    "enabled": true,
+    "longitude": "-8.009741",
+    "latitude": "31.629472",
+    "description": "Modern walk-in and appointment-based center covering Gueliz and Hivernage."
+  },
+  {
+    "id": 6,
+    "code": "FS51742",
+    "name": "Fes Agdal Civil Registry Hub",
+    "email": "fes.agdal@idway.ma",
+    "phone": "+212535620915",
+    "address": "61 Avenue Hassan II, Fes",
+    "enabled": true,
+    "longitude": "-5.003338",
+    "latitude": "34.033130",
+    "description": "Civil registry and identity verification hub for Fes and nearby municipalities."
+  },
+  {
+    "id": 7,
+    "code": "TG60354",
+    "name": "Tangier City Center Enrollment Office",
+    "email": "tangier.center@idway.ma",
+    "phone": "+212539942670",
+    "address": "3 Boulevard Pasteur, Tangier",
+    "enabled": true,
+    "longitude": "-5.812986",
+    "latitude": "35.783228",
+    "description": "Downtown office with extended weekday hours for commuter traffic."
+  },
+  {
+    "id": 8,
+    "code": "AG71429",
+    "name": "Agadir Talborjt Identity Center",
+    "email": "agadir.talborjt@idway.ma",
+    "phone": "+212528822140",
+    "address": "19 Avenue Hassan II, Agadir",
+    "enabled": true,
+    "longitude": "-9.598107",
+    "latitude": "30.427755",
+    "description": "Serves Agadir, Inezgane, and coastal communes in the Souss-Massa region."
+  },
+  {
+    "id": 9,
+    "code": "KN82563",
+    "name": "Kenitra Maamora Enrollment Office",
+    "email": "kenitra.maamora@idway.ma",
+    "phone": "+212537374980",
+    "address": "52 Avenue Mohamed Diouri, Kenitra",
+    "enabled": true,
+    "longitude": "-6.589017",
+    "latitude": "34.261010",
+    "description": "Appointment-focused site serving Kenitra, Sidi Yahya, and surrounding districts."
+  },
+  {
+    "id": 10,
+    "code": "TT93645",
+    "name": "Tetouan Wilaya Citizen Services Desk",
+    "email": "tetouan.wilaya@idway.ma",
+    "phone": "+212539711284",
+    "address": "11 Avenue des FAR, Tetouan",
+    "enabled": true,
+    "longitude": "-5.364219",
+    "latitude": "35.575855",
+    "description": "Citizen services desk handling identity renewals and assisted submissions."
+  }
+]
