@@ -1,3 +1,5 @@
 fastapi==0.116.1
-ollama==0.5.1
+ollama==0.6.1
+PyMuPDF==1.26.4
+python-multipart==0.0.20
 uvicorn[standard]==0.35.0

@@ -1,38 +1,39 @@
-# Local Qwen Voice App
+# Local Government e-Services Assistant
 
-This project records speech in the Expo app, sends the final transcript to a separate FastAPI backend project, forwards that prompt to Ollama running Qwen on your machine through the Python `ollama` library, and then speaks Qwen's reply back to the user.
+This project has two parts:
 
-The mobile app URL defaults live in [config.json](/abs/path/c:/Users/Mouad/Desktop/Expo_Test/config.json). The backend project has its own config in [backend/config.json](/abs/path/c:/Users/Mouad/Desktop/Expo_Test/backend/config.json).
+- an Expo mobile app in the repo root
+- a FastAPI backend in `backend/` that talks to a local Ollama server
+- a minimal Flask web client in `webapp/` for text chat plus file attachments
+
+The mobile app records speech, can upload documents or camera photos, sends everything to the backend, and speaks the backend response back to the user. The assistant flow is aimed at guiding users through government e-services such as ID renewal, visa appointments, and driving license renewal.
 
 ## Backend
 
-The backend is a separate project under [backend/README.md](/abs/path/c:/Users/Mouad/Desktop/Expo_Test/backend/README.md).
-
-Install Python dependencies inside `backend/`:
+Install dependencies:
 
 ```bash
 cd backend
-pip install -r requirements.txt
+py -3 -m pip install -r requirements.txt
 ```
 
-Run the API from `backend/`:
+Run the API:
 
 ```bash
-python run.py
+ollama pull qwen3.5
+cd backend
+py -3 run.py
 ```
 
-Default backend settings come from `backend/config.json`. Optional environment variables still override them:
+The backend expects a local Ollama instance on `http://127.0.0.1:11434`. Default settings live in [backend/config.json](backend/config.json).
+
+Useful environment overrides:
 
 ```bash
-set OLLAMA_MODEL=qwen2.5:latest
 set OLLAMA_URL=http://127.0.0.1:11434
-set OLLAMA_NUM_CTX=4096
+set OLLAMA_MODEL=qwen3.5
+set OLLAMA_NUM_CTX=8192
 ```
-
-The backend exposes:
-
-- `GET /health`
-- `POST /chat` with `{ "prompt": "..." }`
 
 ## Mobile app
 
@@ -40,20 +41,38 @@ Install dependencies and start Expo:
 
 ```bash
 npm install
-npx expo start
+npm start
 ```
 
-Mobile backend URL defaults come from `config.json`:
-
-- `mobile.basePrompt`
-- `mobile.backendUrl.android`
-- `mobile.backendUrl.ios`
-- `mobile.backendUrl.default`
-
-If you want to override that temporarily, set `EXPO_PUBLIC_API_URL`, for example:
+Run on Android:
 
 ```bash
-set EXPO_PUBLIC_API_URL=http://192.168.1.10:8000
+npm run android
 ```
 
-Make sure Ollama is running locally and the configured Qwen model is already pulled before using the app.
+The Android app can:
+
+- record speech
+- take a document photo with the camera
+- compress captured images before upload
+- upload image or PDF files to the backend
+
+Backend URL defaults live in [config.json](config.json). To override them temporarily:
+
+```bash
+set EXPO_PUBLIC_API_URL=http://192.168.1.10:8001
+```
+
+Use your machine LAN IP if the app is running on a phone or emulator and the backend is local.
+
+## Flask web app
+
+Install and run:
+
+```bash
+cd webapp
+py -3 -m pip install -r requirements.txt
+py -3 app.py
+```
+
+The Flask page runs on `http://127.0.0.1:5050` and proxies to the same backend API. It compresses image attachments in the browser before upload and sends PDFs unchanged.

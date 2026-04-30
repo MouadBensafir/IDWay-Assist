@@ -1,0 +1,111 @@
+{
+  "blueprint_id": "visa_appointment",
+  "title": "VISA Appointment",
+  "description": "Book a visa appointment by collecting passport details, travel purpose, and a selectable appointment city, center, date, and time slot from the local service data.",
+  "assistant_persona": "You are IDWay Assist, a practical visa appointment assistant. Guide the user step by step. When asking for appointment logistics, only offer choices from the available city, center, date, and time slot options provided by the system.",
+  "fields": [
+    {
+      "key": "full_name",
+      "label": "Full Name",
+      "field_type": "text",
+      "required": true,
+      "hint": "What is your full name as it appears on your passport?"
+    },
+    {
+      "key": "passport_number",
+      "label": "Passport Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "What is your passport number?"
+    },
+    {
+      "key": "nationality",
+      "label": "Nationality",
+      "field_type": "text",
+      "required": true,
+      "hint": "What is your nationality?"
+    },
+    {
+      "key": "destination_country",
+      "label": "Destination Country",
+      "field_type": "text",
+      "required": true,
+      "hint": "Which country are you traveling to?"
+    },
+    {
+      "key": "purpose_of_travel",
+      "label": "Purpose of Travel",
+      "field_type": "text",
+      "required": true,
+      "hint": "What is the purpose of your travel?"
+    },
+    {
+      "key": "appointment_city",
+      "label": "Appointment City",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Offer only available city options. Store the city code, such as CASA or RABAT.",
+      "data_source": {
+        "path": "data/cities.json",
+        "label_key": "name",
+        "value_key": "code",
+        "enabled_key": "enabled"
+      }
+    },
+    {
+      "key": "appointment_center",
+      "label": "Appointment Center",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Offer only the centers available in the selected city. Store the center code.",
+      "data_source": {
+        "path": "data/centers.json",
+        "label_key": "name",
+        "value_key": "code",
+        "enabled_key": "enabled",
+        "filter": {
+          "field": "cityCode",
+          "from_field": "appointment_city"
+        }
+      },
+      "depends_on": ["appointment_city"]
+    },
+    {
+      "key": "appointment_date",
+      "label": "Appointment Date",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Offer only the appointment date available for the selected center. Store the ISO date value.",
+      "data_source": {
+        "path": "data/timeslots.json",
+        "label_key": "date",
+        "value_key": "date",
+        "filter": {
+          "field": "centerCode",
+          "from_field": "appointment_center"
+        }
+      },
+      "depends_on": ["appointment_center"]
+    },
+    {
+      "key": "appointment_time",
+      "label": "Appointment Time Slot",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Offer only currently available time slots for the selected center. Store the time value, such as 09:15.",
+      "data_source": {
+        "path": "data/timeslots.json",
+        "label_key": "time",
+        "value_key": "time",
+        "items_key": "availableSlots",
+        "child_filter_key": "available",
+        "filter": {
+          "field": "centerCode",
+          "from_field": "appointment_center"
+        }
+      },
+      "depends_on": ["appointment_center", "appointment_date"]
+    }
+  ],
+  "completion_message": "Your visa appointment request is complete. We have your passport details and selected appointment city, center, date, and time slot."
+}

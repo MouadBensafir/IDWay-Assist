@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IDWay Web Chat</title>
+    <style>
+      :root {
+        --bg: #edf3fb;
+        --paper: #ffffff;
+        --line: #c5d4ea;
+        --ink: #11284d;
+        --muted: #486487;
+        --accent: #0f3d91;
+        --accent-dark: #082c6e;
+        --accent-soft: #e7f0ff;
+        --chip: #deebfb;
+        --user: #dce9fb;
+        --assistant: #ffffff;
+        --danger: #c9153b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(15, 61, 145, 0.18), transparent 26%),
+          radial-gradient(circle at 88% 12%, rgba(201, 21, 59, 0.12), transparent 16%),
+          linear-gradient(180deg, #f9fbff 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+
+      .shell {
+        max-width: 980px;
+        margin: 0 auto;
+        min-height: 100vh;
+        padding: 24px;
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 18px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        box-shadow: 0 18px 50px rgba(15, 61, 145, 0.1);
+      }
+
+      .sidebar {
+        padding: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .label {
+        margin: 0 0 8px;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1.05;
+        color: var(--accent);
+      }
+
+      .lede {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .meta-box {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px 14px;
+        background: #f7faff;
+      }
+
+      .meta-value {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.5;
+        word-break: break-word;
+      }
+
+      .button,
+      .file-button {
+        appearance: none;
+        border: 0;
+        border-radius: 14px;
+        min-height: 44px;
+        padding: 12px 16px;
+        background: var(--accent);
+        color: #fff8ef;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .button:hover,
+      .file-button:hover {
+        background: var(--accent-dark);
+      }
+
+      .button.secondary {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .button.secondary:hover {
+        background: #d6e6ff;
+      }
+
+      .button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .file-input {
+        display: none;
+      }
+
+      .chat {
+        padding: 18px;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        min-height: calc(100vh - 48px);
+      }
+
+      .messages {
+        overflow: auto;
+        padding-right: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .message {
+        max-width: 82%;
+        border-radius: 18px;
+        padding: 14px 16px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: var(--user);
+      }
+
+      .message.assistant {
+        align-self: flex-start;
+        background: var(--assistant);
+        border: 1px solid var(--line);
+      }
+
+      .message.system {
+        align-self: center;
+        background: #eef4ff;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+      }
+
+      .composer {
+        border-top: 1px solid var(--line);
+        margin-top: 16px;
+        padding-top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .attachments {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--chip);
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .chip button {
+        border: 0;
+        background: transparent;
+        color: var(--danger);
+        cursor: pointer;
+        font-size: 14px;
+        padding: 0;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 104px;
+        resize: vertical;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        padding: 16px;
+        font: inherit;
+        font-size: 15px;
+        background: #fbfdff;
+        color: var(--ink);
+      }
+
+      textarea:focus {
+        outline: 2px solid rgba(15, 61, 145, 0.18);
+        border-color: var(--accent);
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .hint,
+      .error {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .hint {
+        color: var(--muted);
+      }
+
+      .error {
+        color: var(--danger);
+      }
+
+      @media (max-width: 840px) {
+        .shell {
+          grid-template-columns: 1fr;
+          padding: 14px;
+        }
+
+        .chat {
+          min-height: 70vh;
+        }
+
+        .message {
+          max-width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="card sidebar">
+        <div>
+          <p class="label">Web Console</p>
+          <h1 class="title">IDWay Assistant</h1>
+        </div>
+        <p class="lede">
+          Text-only conversation UI for the same backend used by the Expo app. Images are
+          compressed in the browser before upload. PDFs are sent unchanged.
+        </p>
+
+        <div class="meta-box">
+          <p class="label">Backend</p>
+          <p class="meta-value" id="backend-url">{{ backend_url }}</p>
+        </div>
+
+        <div class="meta-box">
+          <p class="label">Session</p>
+          <p class="meta-value" id="session-id">No active session</p>
+        </div>
+
+        <div class="meta-box">
+          <p class="label">Tokens Used</p>
+          <p class="meta-value" id="token-usage">0 total (0 prompt / 0 completion)</p>
+        </div>
+
+        <button class="button secondary" id="reset-button" type="button">End Conversation</button>
+      </aside>
+
+      <main class="card chat">
+        <div class="messages" id="messages"></div>
+
+        <form class="composer" id="chat-form">
+          <div class="attachments" id="attachments"></div>
+
+          <div class="row">
+            <label class="file-button" for="file-input">Attach Images or PDF</label>
+            <input
+              class="file-input"
+              id="file-input"
+              type="file"
+              accept="image/*,application/pdf,.pdf"
+              multiple
+            />
+          </div>
+
+          <textarea
+            id="prompt"
+            placeholder="Ask for a service, continue a request, or attach a document for extraction."
+          ></textarea>
+
+          <div class="row">
+            <button class="button" id="send-button" type="submit">Send</button>
+          </div>
+
+          <p class="hint" id="status">
+            Ready. Supported attachments: JPG, PNG, WebP, and PDF.
+          </p>
+          <p class="error" id="error"></p>
+        </form>
+      </main>
+    </div>
+
+    <script>
+      const messagesEl = document.getElementById("messages");
+      const attachmentsEl = document.getElementById("attachments");
+      const promptEl = document.getElementById("prompt");
+      const formEl = document.getElementById("chat-form");
+      const fileInputEl = document.getElementById("file-input");
+      const sendButtonEl = document.getElementById("send-button");
+      const resetButtonEl = document.getElementById("reset-button");
+      const statusEl = document.getElementById("status");
+      const errorEl = document.getElementById("error");
+      const sessionIdEl = document.getElementById("session-id");
+      const tokenUsageEl = document.getElementById("token-usage");
+
+      let sessionId = "";
+      let attachments = [];
+      let tokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+
+      addMessage(
+        "assistant",
+        "Hello. I can guide a user through the available government e-services. Ask to renew an ID, book a visa appointment, or renew a driving license."
+      );
+
+      fileInputEl.addEventListener("change", async (event) => {
+        const inputFiles = Array.from(event.target.files || []);
+        if (!inputFiles.length) {
+          return;
+        }
+
+        setStatus("Preparing attachments...");
+        clearError();
+
+        try {
+          const nextFiles = [];
+          for (const file of inputFiles) {
+            nextFiles.push(await normalizeAttachment(file));
+          }
+          attachments = [...attachments, ...nextFiles];
+          renderAttachments();
+          setStatus(`${attachments.length} attachment(s) ready.`);
+        } catch (error) {
+          setError(error instanceof Error ? error.message : "Failed to prepare attachments.");
+          setStatus("Ready.");
+        } finally {
+          fileInputEl.value = "";
+        }
+      });
+
+      formEl.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await sendMessage();
+      });
+
+      promptEl.addEventListener("keydown", async (event) => {
+        if (event.key !== "Enter" || event.shiftKey) {
+          return;
+        }
+
+        event.preventDefault();
+        if (sendButtonEl.disabled) {
+          return;
+        }
+
+        await sendMessage();
+      });
+
+      resetButtonEl.addEventListener("click", async () => {
+        if (!sessionId) {
+          clearConversation();
+          return;
+        }
+
+        setBusy(true);
+        setStatus("Ending conversation...");
+        clearError();
+
+        try {
+          await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+            method: "DELETE",
+          });
+        } catch (_) {
+          // Best effort.
+        } finally {
+          clearConversation();
+          setBusy(false);
+          setStatus("Conversation ended.");
+        }
+      });
+
+      async function sendMessage() {
+        const prompt = promptEl.value.trim();
+        if (!prompt && !attachments.length) {
+          setError("Enter a message or attach at least one file.");
+          return;
+        }
+
+        clearError();
+        addMessage("user", prompt || "Please use the attached files to help with my request.");
+        setBusy(true);
+        setStatus("Sending request...");
+
+        try {
+          const formData = new FormData();
+          formData.append("prompt", prompt || "Please use the attached files to help with my request.");
+          if (sessionId) {
+            formData.append("session_id", sessionId);
+          }
+
+          for (const attachment of attachments) {
+            formData.append("file", attachment.file, attachment.name);
+          }
+
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            body: formData,
+          });
+
+          const payload = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(payload?.detail || "The backend returned an error.");
+          }
+
+          const assistantReply = `${payload?.response || ""}`.trim();
+          if (!assistantReply) {
+            throw new Error("The assistant returned an empty response.");
+          }
+
+          sessionId = `${payload?.session_id || ""}`.trim();
+          tokenUsage = normalizeTokenUsage(payload?.token_usage);
+          renderSession();
+          renderTokenUsage();
+          addMessage("assistant", assistantReply);
+          promptEl.value = "";
+          attachments = [];
+          renderAttachments();
+          setStatus("Ready.");
+        } catch (error) {
+          setError(error instanceof Error ? error.message : "Request failed.");
+          setStatus("Ready.");
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function normalizeAttachment(file) {
+        if (file.type.startsWith("image/")) {
+          return compressImage(file);
+        }
+
+        if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+          return {
+            file,
+            name: file.name || `document-${Date.now()}.pdf`,
+          };
+        }
+
+        throw new Error(`Unsupported file type: ${file.name}`);
+      }
+
+      async function compressImage(file) {
+        const dataUrl = await readAsDataUrl(file);
+        const image = await loadImage(dataUrl);
+        const maxDimension = 1600;
+        const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+          throw new Error("Image compression is unavailable in this browser.");
+        }
+
+        context.drawImage(image, 0, 0, width, height);
+
+        const blob = await new Promise((resolve) => {
+          canvas.toBlob(resolve, "image/jpeg", 0.72);
+        });
+
+        if (!blob) {
+          throw new Error("Image compression failed.");
+        }
+
+        return {
+          file: new File([blob], replaceFileExtension(file.name || "image.jpg", ".jpg"), {
+            type: "image/jpeg",
+          }),
+          name: replaceFileExtension(file.name || "image.jpg", ".jpg"),
+        };
+      }
+
+      function readAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("Could not decode image."));
+          image.src = src;
+        });
+      }
+
+      function replaceFileExtension(name, extension) {
+        return name.replace(/\.[^.]+$/, "") + extension;
+      }
+
+      function renderAttachments() {
+        attachmentsEl.innerHTML = "";
+        for (const [index, attachment] of attachments.entries()) {
+          const chip = document.createElement("div");
+          chip.className = "chip";
+
+          const name = document.createElement("span");
+          name.textContent = attachment.name;
+
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.textContent = "Remove";
+          remove.addEventListener("click", () => {
+            attachments = attachments.filter((_, itemIndex) => itemIndex !== index);
+            renderAttachments();
+          });
+
+          chip.appendChild(name);
+          chip.appendChild(remove);
+          attachmentsEl.appendChild(chip);
+        }
+      }
+
+      function renderSession() {
+        sessionIdEl.textContent = sessionId || "No active session";
+      }
+
+      function renderTokenUsage() {
+        tokenUsageEl.textContent = formatTokenUsage(tokenUsage);
+      }
+
+      function addMessage(role, text) {
+        const message = document.createElement("article");
+        message.className = `message ${role}`;
+        message.textContent = text;
+        messagesEl.appendChild(message);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function clearConversation() {
+        sessionId = "";
+        attachments = [];
+        tokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+        promptEl.value = "";
+        renderAttachments();
+        renderSession();
+        renderTokenUsage();
+        messagesEl.innerHTML = "";
+        addMessage(
+          "assistant",
+          "Hello. Start a new request whenever you're ready."
+        );
+      }
+
+      function setBusy(isBusy) {
+        sendButtonEl.disabled = isBusy;
+        resetButtonEl.disabled = isBusy;
+      }
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function setError(text) {
+        errorEl.textContent = text;
+      }
+
+      function clearError() {
+        errorEl.textContent = "";
+      }
+
+      function normalizeTokenUsage(value) {
+        return {
+          prompt_tokens: Math.max(0, Number(value?.prompt_tokens || 0)),
+          completion_tokens: Math.max(0, Number(value?.completion_tokens || 0)),
+          total_tokens: Math.max(0, Number(value?.total_tokens || 0)),
+        };
+      }
+
+      function formatTokenUsage(value) {
+        return `${value.total_tokens} total (${value.prompt_tokens} prompt / ${value.completion_tokens} completion)`;
+      }
+    </script>
+  </body>
+</html>

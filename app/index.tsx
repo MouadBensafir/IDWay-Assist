@@ -4,13 +4,16 @@ import {
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Constants from "expo-constants";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
 import * as Speech from "expo-speech";
 import type { Voice } from "expo-speech";
 import {
@@ -33,6 +36,24 @@ type Status =
   | "speaking"
   | "error";
 
+type Attachment = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
+type TokenUsage = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+};
+
+const EMPTY_TOKEN_USAGE: TokenUsage = {
+  prompt_tokens: 0,
+  completion_tokens: 0,
+  total_tokens: 0,
+};
+
 export default function MiniTalkie() {
   const [status, setStatus] = useState<Status>(
     UNSUPPORTED_PLATFORM ? "error" : "checking"
@@ -48,6 +69,9 @@ export default function MiniTalkie() {
     null
   );
   const [sessionId, setSessionId] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploadBusy, setUploadBusy] = useState(false);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage>(EMPTY_TOKEN_USAGE);
 
   const finalTranscriptRef = useRef("");
   const shouldSpeakOnEndRef = useRef(false);
@@ -187,29 +211,31 @@ export default function MiniTalkie() {
     }
 
     try {
-      const { assistantReply: qwenReply, sessionId: nextSessionId } =
-        await requestAssistantReply(spokenText, sessionId);
+      const { assistantReply: assistantText, sessionId: nextSessionId, tokenUsage: nextTokenUsage } =
+        await requestAssistantReply(spokenText, sessionId, attachments);
       if (nextSessionId) {
         setSessionId(nextSessionId);
       }
-      setAssistantReply(qwenReply);
+      setTokenUsage(nextTokenUsage);
+      setAttachments([]);
+      setAssistantReply(assistantText);
       setStatus("speaking");
       await Speech.stop();
 
-      Speech.speak(qwenReply, {
+      Speech.speak(assistantText, {
         language: selectedLanguage,
         voice: selectedVoiceId || undefined,
         onDone: () => setStatus("ready"),
         onStopped: () => setStatus("ready"),
         onError: () => {
           setStatus("error");
-          setErrorMessage("The device voice could not play back Qwen's response.");
+          setErrorMessage("The device voice could not play back the assistant response.");
         },
       });
     } catch (error) {
       setStatus("error");
       setErrorMessage(
-        getErrorMessage(error, "The app could not get a response from Qwen.")
+        getErrorMessage(error, "The app could not get a response from the assistant.")
       );
     }
   };
@@ -284,6 +310,8 @@ export default function MiniTalkie() {
     setTranscript("");
     setAssistantReply("");
     setPartialTranscript("");
+    setAttachments([]);
+    setTokenUsage(EMPTY_TOKEN_USAGE);
     finalTranscriptRef.current = "";
     shouldSpeakOnEndRef.current = false;
 
@@ -303,13 +331,138 @@ export default function MiniTalkie() {
     setActiveSelector(null);
   };
 
+  const handleTakePhoto = async () => {
+    try {
+      setErrorMessage("");
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setStatus("error");
+        setErrorMessage("Camera permission was denied.");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: "images",
+        quality: 1,
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      const compressed = await compressImage(result.assets[0].uri);
+      setAttachments((current) => [
+        ...current,
+        {
+          uri: compressed.uri,
+          name: `camera-${Date.now()}.jpg`,
+          type: "image/jpeg",
+        },
+      ]);
+      setStatus("ready");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(getErrorMessage(error, "Unable to capture a photo."));
+    }
+  };
+
+  const handlePickFiles = async () => {
+    try {
+      setErrorMessage("");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf"],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const nextAttachments = await Promise.all(
+        result.assets.map(async (asset) => {
+          const mimeType = asset.mimeType || guessMimeType(asset.name);
+          if (mimeType.startsWith("image/")) {
+            const compressed = await compressImage(asset.uri);
+            return {
+              uri: compressed.uri,
+              name: asset.name || `image-${Date.now()}.jpg`,
+              type: "image/jpeg",
+            };
+          }
+
+          return {
+            uri: asset.uri,
+            name: asset.name || `document-${Date.now()}.pdf`,
+            type: mimeType,
+          };
+        })
+      );
+
+      setAttachments((current) => [...current, ...nextAttachments]);
+      setStatus("ready");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(getErrorMessage(error, "Unable to pick a file."));
+    }
+  };
+
+  const handleSendAttachments = async () => {
+    if (!attachments.length || uploadBusy) {
+      return;
+    }
+
+    try {
+      setUploadBusy(true);
+      setStatus("processing");
+      setErrorMessage("");
+
+      const { assistantReply: assistantText, sessionId: nextSessionId, tokenUsage: nextTokenUsage } =
+        await requestAssistantReply(
+          "Please use the attached files to help with my current service request.",
+          sessionId,
+          attachments
+        );
+
+      if (nextSessionId) {
+        setSessionId(nextSessionId);
+      }
+      setTokenUsage(nextTokenUsage);
+
+      setAttachments([]);
+      setAssistantReply(assistantText);
+      setStatus("speaking");
+      await Speech.stop();
+
+      Speech.speak(assistantText, {
+        language: selectedLanguage,
+        voice: selectedVoiceId || undefined,
+        onDone: () => setStatus("ready"),
+        onStopped: () => setStatus("ready"),
+        onError: () => {
+          setStatus("error");
+          setErrorMessage("The device voice could not play back the assistant response.");
+        },
+      });
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(getErrorMessage(error, "The app could not upload the file."));
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   const liveText = partialTranscript || transcript;
   const buttonDisabled =
     UNSUPPORTED_PLATFORM ||
     status === "checking" ||
     status === "listening";
   const displayReply = assistantReply.trim().length > 0;
-  const panelLabel = displayReply ? "Qwen Replied" : "You Said";
+  const panelLabel = displayReply ? "Assistant Replied" : "You Said";
   const panelText = displayReply
     ? assistantReply
     : liveText || "Your prompt will appear here while the app listens.";
@@ -352,6 +505,68 @@ export default function MiniTalkie() {
             >
               <Text style={styles.resetButtonText}>End Conversation</Text>
             </Pressable>
+            <View style={styles.metaPanel}>
+              <Text style={styles.metaLabel}>Session</Text>
+              <Text style={styles.metaValue}>
+                {sessionId.trim() || "No active session"}
+              </Text>
+              <Text style={styles.metaLabel}>Tokens Used</Text>
+              <Text style={styles.metaValue}>
+                {formatTokenUsage(tokenUsage)}
+              </Text>
+            </View>
+            <View style={styles.uploadActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void handleTakePhoto()}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed ? styles.secondaryButtonPressed : null,
+                ]}
+              >
+                <Text style={styles.secondaryButtonText}>Take Photo</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void handlePickFiles()}
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed ? styles.secondaryButtonPressed : null,
+                ]}
+              >
+                <Text style={styles.secondaryButtonText}>Upload File</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!attachments.length || uploadBusy}
+              onPress={() => void handleSendAttachments()}
+              style={({ pressed }) => [
+                styles.uploadSendButton,
+                !attachments.length || uploadBusy ? styles.resetButtonDisabled : null,
+                pressed && attachments.length && !uploadBusy ? styles.resetButtonPressed : null,
+              ]}
+            >
+              <Text style={styles.uploadSendButtonText}>
+                {uploadBusy ? "Sending..." : "Send Attached Files"}
+              </Text>
+            </Pressable>
+            {attachments.length ? (
+              <View style={styles.attachmentList}>
+                {attachments.map((attachment, index) => (
+                  <Pressable
+                    key={`${attachment.name}-${attachment.uri}`}
+                    onPress={() => handleRemoveAttachment(index)}
+                    style={({ pressed }) => [
+                      styles.attachmentChip,
+                      pressed ? styles.attachmentChipPressed : null,
+                    ]}
+                  >
+                    <Text style={styles.attachmentChipText}>{attachment.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.transcriptCard}>
@@ -616,9 +831,9 @@ function getStatusMessage(status: Status) {
     case "listening":
       return "Listening until you stop speaking.";
     case "processing":
-      return "Sending the prompt to Qwen.";
+      return "Sending the prompt to the assistant.";
     case "speaking":
-      return "Speaking Qwen's response.";
+      return "Speaking the assistant response.";
     case "error":
       return "The request could not be completed.";
     default:
@@ -626,21 +841,32 @@ function getStatusMessage(status: Status) {
   }
 }
 
-async function requestAssistantReply(prompt: string, sessionId?: string) {
+async function requestAssistantReply(
+  prompt: string,
+  sessionId?: string,
+  attachments: Attachment[] = []
+) {
   const requestPrompt = buildPrompt(prompt);
-  const response = await fetch(`${API_URL}/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      prompt: requestPrompt,
-      session_id: sessionId || undefined,
-    }),
-  });
+  const response = attachments.length
+    ? await sendMultipartRequest(requestPrompt, sessionId, attachments)
+    : await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: requestPrompt,
+          session_id: sessionId || undefined,
+        }),
+      });
 
   const payload = (await response.json().catch(() => null)) as
-    | { session_id?: string; response?: string; detail?: string }
+    | {
+        session_id?: string;
+        response?: string;
+        detail?: string;
+        token_usage?: Partial<TokenUsage>;
+      }
     | null;
 
   if (!response.ok) {
@@ -649,13 +875,52 @@ async function requestAssistantReply(prompt: string, sessionId?: string) {
 
   const assistantReply = payload?.response?.trim();
   if (!assistantReply) {
-    throw new Error("Qwen returned an empty response.");
+    throw new Error("The assistant returned an empty response.");
   }
 
   return {
     assistantReply,
     sessionId: payload?.session_id?.trim() || "",
+    tokenUsage: normalizeTokenUsage(payload?.token_usage),
   };
+}
+
+function normalizeTokenUsage(tokenUsage?: Partial<TokenUsage> | null): TokenUsage {
+  return {
+    prompt_tokens: Math.max(0, Number(tokenUsage?.prompt_tokens || 0)),
+    completion_tokens: Math.max(0, Number(tokenUsage?.completion_tokens || 0)),
+    total_tokens: Math.max(0, Number(tokenUsage?.total_tokens || 0)),
+  };
+}
+
+function formatTokenUsage(tokenUsage: TokenUsage) {
+  return `${tokenUsage.total_tokens} total (${tokenUsage.prompt_tokens} prompt / ${tokenUsage.completion_tokens} completion)`;
+}
+
+async function sendMultipartRequest(
+  prompt: string,
+  sessionId: string | undefined,
+  attachments: Attachment[]
+) {
+  const formData = new FormData();
+  formData.append("prompt", prompt);
+
+  if (sessionId?.trim()) {
+    formData.append("session_id", sessionId.trim());
+  }
+
+  attachments.forEach((attachment) => {
+    formData.append("file", {
+      uri: attachment.uri,
+      name: attachment.name,
+      type: attachment.type,
+    } as never);
+  });
+
+  return fetch(`${API_URL}/chat`, {
+    method: "POST",
+    body: formData,
+  });
 }
 
 async function deleteConversationSession(sessionId: string) {
@@ -682,6 +947,24 @@ function buildPrompt(userPrompt: string) {
   }
 
   return `${basePrompt}\n\nUser prompt:\n${cleanedUserPrompt}`;
+}
+
+async function compressImage(uri: string) {
+  return ImageManipulator.manipulateAsync(uri, [], {
+    compress: 0.6,
+    format: ImageManipulator.SaveFormat.JPEG,
+  });
+}
+
+function guessMimeType(filename: string) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) {
+    return "application/pdf";
+  }
+  if (lower.endsWith(".png")) {
+    return "image/png";
+  }
+  return "image/jpeg";
 }
 
 function getBackendUrl() {
@@ -711,7 +994,7 @@ function getBackendUrl() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f4efe6",
+    backgroundColor: "#eef3fb",
   },
   scrollContent: {
     flexGrow: 1,
@@ -721,24 +1004,34 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     justifyContent: "center",
     gap: 16,
-    backgroundColor: "#f4efe6",
+    backgroundColor: "#eef3fb",
     flexGrow: 1,
   },
   controlsCard: {
     padding: 18,
     borderRadius: 22,
-    backgroundColor: "#fffaf2",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#eadfcb",
+    borderColor: "#c7d4eb",
     gap: 12,
+    shadowColor: "#0f3d91",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3,
   },
   transcriptCard: {
     height: 220,
     padding: 18,
     borderRadius: 22,
-    backgroundColor: "#fffaf2",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#eadfcb",
+    borderColor: "#c7d4eb",
+    shadowColor: "#0f3d91",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3,
   },
   panelScroll: {
     flex: 1,
@@ -747,7 +1040,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   sectionLabel: {
-    color: "#7a6c58",
+    color: "#0f3d91",
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.8,
@@ -755,19 +1048,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   transcriptText: {
-    color: "#1d1d1d",
+    color: "#10284c",
     fontSize: 17,
     lineHeight: 24,
     fontWeight: "600",
   },
   replyText: {
-    color: "#1d1d1d",
+    color: "#10284c",
     fontSize: 16,
     lineHeight: 23,
     fontWeight: "500",
   },
   errorText: {
-    color: "#b42318",
+    color: "#c9163a",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -775,7 +1068,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   selectorLabel: {
-    color: "#5b5449",
+    color: "#1c3f78",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -783,8 +1076,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e3d5c2",
-    backgroundColor: "#fef8ef",
+    borderColor: "#b9cae6",
+    backgroundColor: "#f7faff",
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: "row",
@@ -800,13 +1093,13 @@ const styles = StyleSheet.create({
   },
   selectorValue: {
     flex: 1,
-    color: "#1d1d1d",
+    color: "#10284c",
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "600",
   },
   selectorChevron: {
-    color: "#8c7356",
+    color: "#0f3d91",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
@@ -816,8 +1109,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e3d5c2",
-    backgroundColor: "#f8efe3",
+    borderColor: "#b9cae6",
+    backgroundColor: "#edf4ff",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
@@ -829,16 +1122,98 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   resetButtonText: {
-    color: "#6f5d45",
+    color: "#0f3d91",
     fontSize: 13,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  metaPanel: {
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#c7d4eb",
+    borderRadius: 16,
+    backgroundColor: "#f7faff",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  metaLabel: {
+    color: "#58739a",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginTop: 2,
+  },
+  metaValue: {
+    color: "#10284c",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  uploadActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#b9cae6",
+    backgroundColor: "#f4f8ff",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  secondaryButtonPressed: {
+    transform: [{ scale: 0.99 }],
+  },
+  secondaryButtonText: {
+    color: "#0f3d91",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  uploadSendButton: {
+    minHeight: 42,
+    borderRadius: 14,
+    backgroundColor: "#0f3d91",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  uploadSendButtonText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  attachmentList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  attachmentChip: {
+    borderRadius: 999,
+    backgroundColor: "#e3edfb",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  attachmentChipPressed: {
+    opacity: 0.8,
+  },
+  attachmentChipText: {
+    color: "#163867",
+    fontSize: 12,
+    fontWeight: "700",
+  },
   button: {
     minHeight: 54,
     borderRadius: 999,
-    backgroundColor: "#c84c31",
+    backgroundColor: "#0f3d91",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
@@ -850,19 +1225,19 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   buttonText: {
-    color: "#fef6eb",
+    color: "#ffffff",
     fontSize: 15,
     fontWeight: "800",
   },
   statusText: {
-    color: "#5b5449",
+    color: "#34527f",
     textAlign: "center",
     fontSize: 13,
     lineHeight: 18,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(29, 29, 29, 0.35)",
+    backgroundColor: "rgba(8, 32, 84, 0.35)",
     justifyContent: "flex-end",
   },
   modalDismissArea: {
@@ -870,7 +1245,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     maxHeight: "70%",
-    backgroundColor: "#fffaf2",
+    backgroundColor: "#ffffff",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -879,7 +1254,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   modalTitle: {
-    color: "#1d1d1d",
+    color: "#0f3d91",
     fontSize: 18,
     fontWeight: "800",
   },
@@ -894,13 +1269,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   modalOptionSelected: {
-    backgroundColor: "#f0e0ca",
+    backgroundColor: "#e7f0ff",
   },
   modalOptionPressed: {
     opacity: 0.8,
   },
   modalOptionText: {
-    color: "#1d1d1d",
+    color: "#10284c",
     fontSize: 15,
     lineHeight: 21,
     fontWeight: "500",
@@ -911,12 +1286,12 @@ const styles = StyleSheet.create({
   modalCloseButton: {
     minHeight: 48,
     borderRadius: 16,
-    backgroundColor: "#c84c31",
+    backgroundColor: "#0f3d91",
     alignItems: "center",
     justifyContent: "center",
   },
   modalCloseText: {
-    color: "#fef6eb",
+    color: "#ffffff",
     fontSize: 14,
     fontWeight: "800",
   },

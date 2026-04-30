@@ -52,6 +52,13 @@
           ]
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Expo_Test to take photos of your documents.",
+          "photosPermission": "Allow Expo_Test to choose document images from your library."
+        }
+      ],
       "expo-build-properties"
     ],
     "experiments": {

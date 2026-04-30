@@ -8,42 +8,38 @@ from typing import Any
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = BACKEND_DIR / "config.json"
+TEMPLATES_DIR = BACKEND_DIR / "templates"
+SUBMISSIONS_DIR = BACKEND_DIR / "submissions"
+
 DEFAULT_CONFIG = {
     "server": {
         "host": "0.0.0.0",
         "port": 8001,
     },
     "chat": {
-        "maxToolRounds": 5,
         "systemPrompt": (
-            "You are IDWay Assist, a guided e-service agent. "
-            "Help the user complete one service request at a time by calling the available tools. "
-            "Do not invent services, form fields, appointment options, or submission results. "
-            "Use `list_services` before suggesting services, `get_service_details` to determine step order, "
-            "`get_form_fields` and `validate_form_field` for form collection, and the appointment tools for location, date, and time selection. "
-            "Ask one focused question at a time, keep the flow concise, summarize before submission, and only call "
-            "`submit_service_request` after the user explicitly confirms they want to submit. "
-            "When `submit_service_request` succeeds, give one brief final confirmation that includes the reference number and saved summary file path, "
-            "then end the flow by asking if the user wants to do something else. Do not continue collecting data after a successful submission."
+            "You are IDWay Assist, a helpful service assistant for a company offering identity and appointment services. "
+            "Guide the user through the correct service, explain the process when asked, and use the provided tools to inspect and update the submission database. "
+            "Be conversational, concise, and practical. Never invent field values or claim a database update happened unless a tool confirmed it."
         ),
-        "memorySummaryPrompt": (
-            "Summarize the useful durable context from this conversation for a follow-up assistant turn. "
-            "Keep only information that should persist: the user's goal, collected facts, confirmed choices, "
-            "validated form data, pending questions, constraints, corrections, and any tool results that still matter. "
-            "Omit chit-chat, repeated wording, and transient steps that no longer matter. "
-            "Write concise bullet-style plain text without markdown."
+        "assistantStylePrompt": (
+            "Use tools whenever you need service details or want to read or update the submission state. "
+            "Ask one focused follow-up question at a time when information is missing. "
+            "If uploaded documents contain useful details, update the submission quietly and then continue naturally. "
+            "When a service is complete, summarize the collected data clearly and confirm the session is complete."
         ),
+        "maxToolRounds": 6,
+        "recentMessageCount": 10,
     },
     "ollama": {
-        "url": "http://127.0.0.1:11434",
+        "url": "http://localhost:11434",
         "model": "qwen3.5",
-        "numCtx": 4096,
         "requestTimeoutSeconds": 120,
-        "maxContextChars": 16000,
-        "recentMessageCount": 8,
-        "compactTriggerChars": 12000,
-        "toolResultMaxChars": 2500,
-        "toolResultMaxItems": 8,
+        "maxCompletionTokens": 2048,
+        "temperature": 0.2,
+        "numCtx": 8192,
+        "pdfVisionMaxPages": 3,
+        "pdfTextMinChars": 80,
     },
 }
 
@@ -65,6 +61,18 @@ CONFIG = load_config()
 CHAT_CONFIG = CONFIG.get("chat", {})
 OLLAMA_CONFIG = CONFIG.get("ollama", {})
 
+SYSTEM_PROMPT = str(
+    CHAT_CONFIG.get(
+        "systemPrompt",
+        DEFAULT_CONFIG["chat"]["systemPrompt"],
+    )
+)
+ASSISTANT_STYLE_PROMPT = str(
+    CHAT_CONFIG.get(
+        "assistantStylePrompt",
+        DEFAULT_CONFIG["chat"]["assistantStylePrompt"],
+    )
+)
 MAX_TOOL_ROUNDS = int(
     os.getenv(
         "CHAT_MAX_TOOL_ROUNDS",
@@ -76,16 +84,15 @@ MAX_TOOL_ROUNDS = int(
         ),
     )
 )
-SYSTEM_PROMPT = str(
-    CHAT_CONFIG.get(
-        "systemPrompt",
-        DEFAULT_CONFIG["chat"]["systemPrompt"],
-    )
-)
-MEMORY_SUMMARY_PROMPT = str(
-    CHAT_CONFIG.get(
-        "memorySummaryPrompt",
-        DEFAULT_CONFIG["chat"]["memorySummaryPrompt"],
+RECENT_MESSAGE_COUNT = int(
+    os.getenv(
+        "CHAT_RECENT_MESSAGE_COUNT",
+        str(
+            CHAT_CONFIG.get(
+                "recentMessageCount",
+                DEFAULT_CONFIG["chat"]["recentMessageCount"],
+            )
+        ),
     )
 )
 
@@ -108,6 +115,28 @@ REQUEST_TIMEOUT_SECONDS = float(
         ),
     )
 )
+MAX_COMPLETION_TOKENS = int(
+    os.getenv(
+        "OLLAMA_MAX_COMPLETION_TOKENS",
+        str(
+            OLLAMA_CONFIG.get(
+                "maxCompletionTokens",
+                DEFAULT_CONFIG["ollama"]["maxCompletionTokens"],
+            )
+        ),
+    )
+)
+OLLAMA_TEMPERATURE = float(
+    os.getenv(
+        "OLLAMA_TEMPERATURE",
+        str(
+            OLLAMA_CONFIG.get(
+                "temperature",
+                DEFAULT_CONFIG["ollama"]["temperature"],
+            )
+        ),
+    )
+)
 OLLAMA_NUM_CTX = int(
     os.getenv(
         "OLLAMA_NUM_CTX",
@@ -119,57 +148,24 @@ OLLAMA_NUM_CTX = int(
         ),
     )
 )
-MAX_CONTEXT_CHARS = int(
+PDF_VISION_MAX_PAGES = int(
     os.getenv(
-        "OLLAMA_MAX_CONTEXT_CHARS",
+        "PDF_VISION_MAX_PAGES",
         str(
             OLLAMA_CONFIG.get(
-                "maxContextChars",
-                DEFAULT_CONFIG["ollama"]["maxContextChars"],
+                "pdfVisionMaxPages",
+                DEFAULT_CONFIG["ollama"]["pdfVisionMaxPages"],
             )
         ),
     )
 )
-COMPACT_TRIGGER_CHARS = int(
+PDF_TEXT_MIN_CHARS = int(
     os.getenv(
-        "OLLAMA_COMPACT_TRIGGER_CHARS",
+        "PDF_TEXT_MIN_CHARS",
         str(
             OLLAMA_CONFIG.get(
-                "compactTriggerChars",
-                DEFAULT_CONFIG["ollama"]["compactTriggerChars"],
-            )
-        ),
-    )
-)
-RECENT_MESSAGE_COUNT = int(
-    os.getenv(
-        "OLLAMA_RECENT_MESSAGE_COUNT",
-        str(
-            OLLAMA_CONFIG.get(
-                "recentMessageCount",
-                DEFAULT_CONFIG["ollama"]["recentMessageCount"],
-            )
-        ),
-    )
-)
-TOOL_RESULT_MAX_CHARS = int(
-    os.getenv(
-        "OLLAMA_TOOL_RESULT_MAX_CHARS",
-        str(
-            OLLAMA_CONFIG.get(
-                "toolResultMaxChars",
-                DEFAULT_CONFIG["ollama"]["toolResultMaxChars"],
-            )
-        ),
-    )
-)
-TOOL_RESULT_MAX_ITEMS = int(
-    os.getenv(
-        "OLLAMA_TOOL_RESULT_MAX_ITEMS",
-        str(
-            OLLAMA_CONFIG.get(
-                "toolResultMaxItems",
-                DEFAULT_CONFIG["ollama"]["toolResultMaxItems"],
+                "pdfTextMinChars",
+                DEFAULT_CONFIG["ollama"]["pdfTextMinChars"],
             )
         ),
     )

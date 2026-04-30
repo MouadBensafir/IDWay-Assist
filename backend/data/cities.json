@@ -1,0 +1,82 @@
+[
+  {
+    "id": 1,
+    "code": "CASA",
+    "name": "Casablanca",
+    "region": "Casablanca-Settat",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 2,
+    "code": "RABAT",
+    "name": "Rabat",
+    "region": "Rabat-Sale-Kenitra",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 3,
+    "code": "SALE",
+    "name": "Sale",
+    "region": "Rabat-Sale-Kenitra",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 4,
+    "code": "MARRAKECH",
+    "name": "Marrakech",
+    "region": "Marrakech-Safi",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 5,
+    "code": "FES",
+    "name": "Fes",
+    "region": "Fes-Meknes",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 6,
+    "code": "TANGIER",
+    "name": "Tangier",
+    "region": "Tangier-Tetouan-Al Hoceima",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 7,
+    "code": "AGADIR",
+    "name": "Agadir",
+    "region": "Souss-Massa",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 8,
+    "code": "KENITRA",
+    "name": "Kenitra",
+    "region": "Rabat-Sale-Kenitra",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 9,
+    "code": "TETOUAN",
+    "name": "Tetouan",
+    "region": "Tangier-Tetouan-Al Hoceima",
+    "country": "Morocco",
+    "enabled": true
+  },
+  {
+    "id": 10,
+    "code": "MEKNES",
+    "name": "Meknes",
+    "region": "Fes-Meknes",
+    "country": "Morocco",
+    "enabled": true
+  }
+]
