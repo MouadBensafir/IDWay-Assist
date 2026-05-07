@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from .config import (
+    BACKEND_DIR,
     ASSISTANT_STYLE_PROMPT,
     MAX_TOOL_ROUNDS,
     OLLAMA_MODEL,
@@ -18,7 +20,9 @@ from .config import (
     SYSTEM_PROMPT,
     TEMPLATES_DIR,
 )
+from .blueprint import Blueprint, BlueprintField, FieldType
 from .document_utils import build_document_payload
+from .form_engine import fetch_field_options
 from .models import DeleteSessionResponse, PromptRequest, PromptResponse
 from .ollama_client import extract_token_usage, ollama_chat_completion
 from .session_store import (
@@ -274,12 +278,12 @@ async def chat(request: Request) -> PromptResponse:
     # If the LLM responded with text but never called a SAVE tool, and there are
     # still missing fields, run a quick text-only extraction call.
     form_data = load_current_form(session)
-    missing_fields = get_missing_fields(form_data or {})
+    missing_fields = get_missing_fields(form_data or {}, session.service_name)
     if missing_fields and not data_was_saved and prompt.strip():
         print(f"[Safety Net] No data saved by LLM. Attempting fallback extraction for: {missing_fields}")
         await _extract_from_conversation(session, prompt, response_text)
         form_data = load_current_form(session)
-        missing_fields = get_missing_fields(form_data or {})
+        missing_fields = get_missing_fields(form_data or {}, session.service_name)
     # ─────────────────────────────────────────────────────────────────────────
 
     return PromptResponse(
@@ -439,11 +443,10 @@ def build_llm_messages(session: SessionState, user_content: list[dict[str, Any]]
 
 def build_state_summary(session: SessionState) -> str:
     form_data = load_current_form(session)
-    missing_fields = get_missing_fields(form_data or {})
-    filled_fields = {
-        k: v for k, v in (form_data or {}).items()
-        if isinstance(v, str) and v.strip()
-    }
+    blueprint = get_service_blueprint(session.service_name)
+    field_map = blueprint.field_map() if blueprint is not None else {}
+    missing_fields = get_missing_fields(form_data or {}, session.service_name)
+    filled_fields = get_filled_fields(form_data or {}, session.service_name)
     service_name = session.service_name or "None"
 
     doc_count = len(session.cached_vision_parts) + len(session.cached_text_blocks)
@@ -639,7 +642,7 @@ def execute_tool_call(session: SessionState, tool_call: Any) -> dict[str, Any]:
 
     if function_name == "complete_service_request":
         form_data = load_current_form(session)
-        missing_fields = get_missing_fields(form_data or {})
+        missing_fields = get_missing_fields(form_data or {}, session.service_name)
         if missing_fields:
             return {
                 "ok": False,
@@ -880,6 +883,250 @@ def coerce_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+@lru_cache(maxsize=None)
+def get_service_blueprint(service_name: str | None) -> Blueprint | None:
+    if not service_name:
+        return None
+
+    service_config = SERVICE_CATALOG.get(service_name)
+    if not service_config:
+        return None
+
+    template_name = normalize_optional_string(service_config.get("template"))
+    if not template_name:
+        return None
+
+    blueprint_path = BACKEND_DIR / "data" / "blueprints" / template_name
+    if not blueprint_path.exists():
+        return None
+
+    with blueprint_path.open("r", encoding="utf-8") as file_handle:
+        raw = json.load(file_handle)
+    return Blueprint.model_validate(raw)
+
+
+def is_filled_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+def _dependencies_met(field: BlueprintField, form_data: dict[str, Any]) -> bool:
+    return all(is_filled_value(form_data.get(dep)) for dep in field.depends_on)
+
+
+def sync_form_data_with_blueprint(service_name: str | None, form_data: dict[str, Any]) -> bool:
+    blueprint = get_service_blueprint(service_name)
+    if blueprint is None:
+        return False
+
+    changed = False
+    normalized_keys = {normalize_key(key): key for key in list(form_data.keys())}
+
+    for field in blueprint.fields:
+        if field.key in form_data:
+            continue
+
+        legacy_key = normalized_keys.get(normalize_key(field.label))
+        legacy_value = form_data.get(legacy_key) if legacy_key else None
+        form_data[field.key] = legacy_value if is_filled_value(legacy_value) else None
+        changed = True
+
+    return changed
+
+
+def get_missing_fields(form_data: dict[str, Any], service_name: str | None = None) -> list[str]:
+    blueprint = get_service_blueprint(service_name)
+    if blueprint is not None:
+        return [
+            field.key
+            for field in blueprint.fields
+            if field.required and not is_filled_value(form_data.get(field.key))
+        ]
+
+    missing_fields: list[str] = []
+    for key, value in form_data.items():
+        if not is_filled_value(value):
+            missing_fields.append(key)
+    return missing_fields
+
+
+def get_filled_fields(form_data: dict[str, Any], service_name: str | None = None) -> dict[str, Any]:
+    blueprint = get_service_blueprint(service_name)
+    if blueprint is not None:
+        return {
+            field.key: form_data[field.key]
+            for field in blueprint.fields
+            if field.key in form_data and is_filled_value(form_data.get(field.key))
+        }
+
+    return {
+        key: value
+        for key, value in form_data.items()
+        if is_filled_value(value)
+    }
+
+
+def build_service_details(service_name: str) -> dict[str, Any]:
+    service_config = SERVICE_CATALOG[service_name]
+    blueprint = get_service_blueprint(service_name)
+    required_fields = (
+        [field.label for field in blueprint.fields if field.required]
+        if blueprint is not None
+        else list(service_config["questions"].keys())
+    )
+    return {
+        "name": service_name,
+        "description": service_config["description"],
+        "process": service_config["process"],
+        "required_fields": required_fields,
+        "next_questions": service_config["questions"],
+    }
+
+
+def get_next_question(service_name: str | None, missing_fields: list[str]) -> str | None:
+    if not service_name or not missing_fields:
+        return None
+
+    blueprint = get_service_blueprint(service_name)
+    if blueprint is not None:
+        field = blueprint.field_map().get(missing_fields[0])
+        if field is None:
+            return None
+        return field.hint or f"Please provide your {field.label.lower()}."
+
+    return SERVICE_CATALOG[service_name]["questions"].get(missing_fields[0])
+
+
+def describe_submission_state(service_name: str | None, form_data: dict[str, Any]) -> dict[str, Any]:
+    missing_fields = get_missing_fields(form_data, service_name)
+    filled_fields = get_filled_fields(form_data, service_name)
+
+    return {
+        "service_name": service_name,
+        "filled_fields": filled_fields,
+        "missing_fields": missing_fields,
+        "next_question": get_next_question(service_name, missing_fields),
+        "is_complete": not missing_fields,
+    }
+
+
+def load_current_form(session: SessionState) -> dict[str, Any] | None:
+    if not session.submission_path:
+        return None
+
+    submission_path = Path(session.submission_path)
+    if not submission_path.exists():
+        return None
+
+    with submission_path.open("r", encoding="utf-8") as file_handle:
+        data = json.load(file_handle)
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=500, detail="Stored submission file is invalid.")
+
+    if sync_form_data_with_blueprint(session.service_name, data):
+        save_current_form(session, data)
+
+    return data
+
+
+def create_submission_from_template(session_id: str, service_name: str) -> Path:
+    blueprint = get_service_blueprint(service_name)
+    if blueprint is not None:
+        form_data = {field.key: None for field in blueprint.fields}
+    else:
+        service_config = SERVICE_CATALOG[service_name]
+        template_path = TEMPLATES_DIR / str(service_config["template"])
+        if not template_path.exists():
+            raise HTTPException(status_code=500, detail=f"Template not found for {service_name}.")
+
+        with template_path.open("r", encoding="utf-8") as file_handle:
+            form_data = json.load(file_handle)
+
+    safe_service_name = re.sub(r"[^a-z0-9]+", "_", service_name.lower()).strip("_")
+    submission_path = SUBMISSIONS_DIR / f"{session_id}_{safe_service_name}.json"
+    with submission_path.open("w", encoding="utf-8") as file_handle:
+        json.dump(form_data, file_handle, ensure_ascii=False, indent=2)
+
+    return submission_path
+
+
+def build_state_summary(session: SessionState) -> str:
+    form_data = load_current_form(session)
+    blueprint = get_service_blueprint(session.service_name)
+    field_map = blueprint.field_map() if blueprint is not None else {}
+    missing_fields = get_missing_fields(form_data or {}, session.service_name)
+    filled_fields = get_filled_fields(form_data or {}, session.service_name)
+    service_name = session.service_name or "None"
+
+    doc_count = len(session.cached_vision_parts) + len(session.cached_text_blocks)
+    doc_status = (
+        f"{doc_count} document(s) cached - they are re-injected into every turn automatically"
+        if session.has_received_document
+        else "No documents uploaded yet this session"
+    )
+
+    parts = [
+        "=== CURRENT SESSION STATE ===",
+        f"Service: {service_name}",
+        f"Documents: {doc_status}",
+    ]
+
+    if filled_fields:
+        parts.append("\nAlready saved in submission:")
+        for key, value in filled_fields.items():
+            label = field_map.get(key).label if key in field_map else key
+            parts.append(f"  - {label}: {value}")
+
+    if missing_fields:
+        parts.append("\nSTILL EMPTY (must be filled):")
+        for field_name in missing_fields:
+            field = field_map.get(field_name)
+            if field is None:
+                parts.append(f"  - {field_name}")
+                continue
+
+            if not _dependencies_met(field, form_data or {}):
+                dependency_labels = [
+                    field_map[dep].label
+                    for dep in field.depends_on
+                    if dep in field_map
+                ]
+                deps_text = ", ".join(dependency_labels) if dependency_labels else "required earlier fields"
+                parts.append(f"  - {field.label} (wait until {deps_text} is filled)")
+                continue
+
+            line = f"  - {field.label}"
+            if field.hint:
+                line += f": {field.hint}"
+            parts.append(line)
+
+            if field.field_type == FieldType.DYNAMIC_ENUM:
+                options = fetch_field_options(field, form_data or {}) or []
+                if options:
+                    options_text = ", ".join(
+                        f"{item['label']} ({item['value']})"
+                        if item["label"] != item["value"]
+                        else item["label"]
+                        for item in options
+                    )
+                    parts.append(f"    Available options: {options_text}")
+
+        parts.append(
+            "\n>>> ACTION: If the user provides ANY of the above fields in this message, "
+            "you MUST call `update_submission_fields` to save them NOW. <<<"
+        )
+    else:
+        parts.append("\nAll fields are filled! Call `complete_service_request` to finish.")
+
+    return "\n".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # Extraction safety nets
 # ---------------------------------------------------------------------------
@@ -899,7 +1146,7 @@ async def _extract_document_fields(session: SessionState, document_payload: Any)
     if form_data is None:
         return
 
-    missing = get_missing_fields(form_data)
+    missing = get_missing_fields(form_data, session.service_name)
     if not missing:
         return
 
@@ -966,7 +1213,7 @@ async def _extract_from_conversation(
     if form_data is None:
         return
 
-    missing = get_missing_fields(form_data)
+    missing = get_missing_fields(form_data, session.service_name)
     if not missing:
         return
 
