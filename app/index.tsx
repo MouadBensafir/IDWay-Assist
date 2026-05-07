@@ -1,27 +1,28 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import * as Speech from "expo-speech";
 import type { Voice } from "expo-speech";
+import * as Speech from "expo-speech";
 import {
-  ExpoSpeechRecognitionErrorEvent,
-  ExpoSpeechRecognitionModule,
-  ExpoSpeechRecognitionResultEvent,
-  useSpeechRecognitionEvent,
+    ExpoSpeechRecognitionErrorEvent,
+    ExpoSpeechRecognitionModule,
+    ExpoSpeechRecognitionResultEvent,
+    useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
+import { useEffect, useRef, useState } from "react";
+import {
+    ActivityIndicator,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import appConfig from "../config.json";
 
 const DEFAULT_LOCALE = "en-US";
@@ -48,11 +49,52 @@ type TokenUsage = {
   total_tokens: number;
 };
 
+type FormState = {
+  fullName: string;
+  dateOfBirth: string;
+  phone: string;
+  email: string;
+  nationality: string;
+  idNumber: string;
+  addressLine1: string;
+  city: string;
+  serviceType: string;
+  preferredCenter: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  notes: string;
+};
+
+type FormFillPayload = Partial<Record<keyof FormState, string | null>> & {
+  complete?: boolean;
+};
+
 const EMPTY_TOKEN_USAGE: TokenUsage = {
   prompt_tokens: 0,
   completion_tokens: 0,
   total_tokens: 0,
 };
+
+const FORM_FIELD_CONFIG: Array<{
+  key: keyof FormState;
+  label: string;
+  placeholder: string;
+  multiline?: boolean;
+}> = [
+  { key: "fullName", label: "Full Name", placeholder: "Jane Maria Doe" },
+  { key: "dateOfBirth", label: "Date of Birth", placeholder: "YYYY-MM-DD" },
+  { key: "phone", label: "Phone", placeholder: "+1 555 123 4567" },
+  { key: "email", label: "Email", placeholder: "name@example.com" },
+  { key: "nationality", label: "Nationality", placeholder: "Country" },
+  { key: "idNumber", label: "ID / Passport Number", placeholder: "A12345678" },
+  { key: "addressLine1", label: "Address", placeholder: "Street, building, unit" },
+  { key: "city", label: "City", placeholder: "City" },
+  { key: "serviceType", label: "Service Type", placeholder: "ID renewal" },
+  { key: "preferredCenter", label: "Preferred Center", placeholder: "Main office" },
+  { key: "appointmentDate", label: "Appointment Date", placeholder: "YYYY-MM-DD" },
+  { key: "appointmentTime", label: "Appointment Time", placeholder: "HH:MM" },
+  { key: "notes", label: "Notes", placeholder: "Extra details", multiline: true },
+];
 
 export default function MiniTalkie() {
   const [status, setStatus] = useState<Status>(
@@ -72,6 +114,24 @@ export default function MiniTalkie() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(EMPTY_TOKEN_USAGE);
+  const [isAiMode, setIsAiMode] = useState(false);
+  const [formFillBusy, setFormFillBusy] = useState(false);
+  const [formFillMessage, setFormFillMessage] = useState("");
+  const [formData, setFormData] = useState<FormState>({
+    fullName: "",
+    dateOfBirth: "",
+    phone: "",
+    email: "",
+    nationality: "",
+    idNumber: "",
+    addressLine1: "",
+    city: "",
+    serviceType: "",
+    preferredCenter: "",
+    appointmentDate: "",
+    appointmentTime: "",
+    notes: "",
+  });
 
   const finalTranscriptRef = useRef("");
   const shouldSpeakOnEndRef = useRef(false);
@@ -200,6 +260,43 @@ export default function MiniTalkie() {
     await fetchAssistantReply();
   };
 
+  const handleFormFieldChange = (key: keyof FormState, value: string) => {
+    setFormData((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleOpenAiMode = () => {
+    setFormFillMessage("");
+    setIsAiMode(true);
+  };
+
+  const handleExitAiMode = async () => {
+    if (formFillBusy) {
+      return;
+    }
+
+    try {
+      setFormFillBusy(true);
+      setStatus("processing");
+      setErrorMessage("");
+      const { formData: nextFormData, sessionId: nextSessionId } =
+        await requestFormAutofill(sessionId, formData);
+      if (nextSessionId) {
+        setSessionId(nextSessionId);
+      }
+      setFormData(nextFormData);
+      setFormFillMessage("Form updated from the AI conversation.");
+      setIsAiMode(false);
+      setStatus("ready");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(
+        getErrorMessage(error, "Unable to auto-fill the form.")
+      );
+    } finally {
+      setFormFillBusy(false);
+    }
+  };
+
   const fetchAssistantReply = async () => {
     const spokenText = finalTranscriptRef.current.trim();
 
@@ -252,12 +349,19 @@ export default function MiniTalkie() {
 
       await Speech.stop();
 
-      const permissions =
-        await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      const currentPermissions =
+        await ExpoSpeechRecognitionModule.getPermissionsAsync();
+
+      const permissions = currentPermissions.granted
+        ? currentPermissions
+        : await ExpoSpeechRecognitionModule.requestPermissionsAsync();
 
       if (!permissions.granted) {
         setStatus("error");
-        setErrorMessage("Microphone permission was denied.");
+        const deniedMessage = permissions.canAskAgain
+          ? "Microphone permission was denied. Tap again to allow it."
+          : "Microphone permission is blocked. Reinstall the app to see the prompt again.";
+        setErrorMessage(deniedMessage);
         return;
       }
 
@@ -479,130 +583,190 @@ export default function MiniTalkie() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          <View style={styles.controlsCard}>
-            <Text style={styles.sectionLabel}>Speech Settings</Text>
-            <SelectorField
-              label="Language"
-              value={languageLabel}
-              disabled={languageOptions.length === 0}
-              onPress={() => setActiveSelector("language")}
-            />
-            <SelectorField
-              label="Voice"
-              value={voiceLabel}
-              disabled={voiceSelectorDisabled}
-              onPress={() => setActiveSelector("voice")}
-            />
-            <Pressable
-              accessibilityRole="button"
-              disabled={!sessionId}
-              onPress={() => void handleResetConversation()}
-              style={({ pressed }) => [
-                styles.resetButton,
-                !sessionId ? styles.resetButtonDisabled : null,
-                pressed && sessionId ? styles.resetButtonPressed : null,
-              ]}
-            >
-              <Text style={styles.resetButtonText}>End Conversation</Text>
-            </Pressable>
-            <View style={styles.metaPanel}>
-              <Text style={styles.metaLabel}>Session</Text>
-              <Text style={styles.metaValue}>
-                {sessionId.trim() || "No active session"}
-              </Text>
-              <Text style={styles.metaLabel}>Tokens Used</Text>
-              <Text style={styles.metaValue}>
-                {formatTokenUsage(tokenUsage)}
-              </Text>
+          {!isAiMode ? (
+            <View style={styles.formCard}>
+              <View style={styles.formHeader}>
+                <View>
+                  <Text style={styles.formTitle}>Application Form</Text>
+                  <Text style={styles.formSubtitle}>Fill in your details or tap AI to help.</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={handleOpenAiMode}
+                  style={({ pressed }) => [
+                    styles.aiButton,
+                    pressed ? styles.aiButtonPressed : null,
+                  ]}
+                >
+                  <Text style={styles.aiButtonText}>AI</Text>
+                </Pressable>
+              </View>
+
+              {FORM_FIELD_CONFIG.map((field) => (
+                <View key={field.key} style={styles.formField}>
+                  <Text style={styles.formLabel}>{field.label}</Text>
+                  <TextInput
+                    value={formData[field.key]}
+                    onChangeText={(value) => handleFormFieldChange(field.key, value)}
+                    placeholder={field.placeholder}
+                    placeholderTextColor="#7b8fb0"
+                    style={styles.formInput}
+                    multiline={field.multiline}
+                    textAlignVertical={field.multiline ? "top" : "center"}
+                  />
+                </View>
+              ))}
+
+              {formFillMessage ? (
+                <Text style={styles.formMessage}>{formFillMessage}</Text>
+              ) : null}
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
             </View>
-            <View style={styles.uploadActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handleTakePhoto()}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Take Photo</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handlePickFiles()}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Upload File</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              disabled={!attachments.length || uploadBusy}
-              onPress={() => void handleSendAttachments()}
-              style={({ pressed }) => [
-                styles.uploadSendButton,
-                !attachments.length || uploadBusy ? styles.resetButtonDisabled : null,
-                pressed && attachments.length && !uploadBusy ? styles.resetButtonPressed : null,
-              ]}
-            >
-              <Text style={styles.uploadSendButtonText}>
-                {uploadBusy ? "Sending..." : "Send Attached Files"}
-              </Text>
-            </Pressable>
-            {attachments.length ? (
-              <View style={styles.attachmentList}>
-                {attachments.map((attachment, index) => (
+          ) : (
+            <>
+              <View style={styles.controlsCard}>
+                <View style={styles.aiHeaderRow}>
+                  <Text style={styles.sectionLabel}>AI Agency</Text>
                   <Pressable
-                    key={`${attachment.name}-${attachment.uri}`}
-                    onPress={() => handleRemoveAttachment(index)}
+                    accessibilityRole="button"
+                    disabled={formFillBusy}
+                    onPress={() => void handleExitAiMode()}
                     style={({ pressed }) => [
-                      styles.attachmentChip,
-                      pressed ? styles.attachmentChipPressed : null,
+                      styles.aiExitButton,
+                      formFillBusy ? styles.resetButtonDisabled : null,
+                      pressed && !formFillBusy ? styles.resetButtonPressed : null,
                     ]}
                   >
-                    <Text style={styles.attachmentChipText}>{attachment.name}</Text>
+                    <Text style={styles.aiExitButtonText}>
+                      {formFillBusy ? "Filling..." : "Return & Autofill"}
+                    </Text>
                   </Pressable>
-                ))}
+                </View>
+                <Text style={styles.sectionLabel}>Speech Settings</Text>
+                <SelectorField
+                  label="Language"
+                  value={languageLabel}
+                  disabled={languageOptions.length === 0}
+                  onPress={() => setActiveSelector("language")}
+                />
+                <SelectorField
+                  label="Voice"
+                  value={voiceLabel}
+                  disabled={voiceSelectorDisabled}
+                  onPress={() => setActiveSelector("voice")}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!sessionId}
+                  onPress={() => void handleResetConversation()}
+                  style={({ pressed }) => [
+                    styles.resetButton,
+                    !sessionId ? styles.resetButtonDisabled : null,
+                    pressed && sessionId ? styles.resetButtonPressed : null,
+                  ]}
+                >
+                  <Text style={styles.resetButtonText}>End Conversation</Text>
+                </Pressable>
+                <View style={styles.metaPanel}>
+                  <Text style={styles.metaLabel}>Session</Text>
+                  <Text style={styles.metaValue}>
+                    {sessionId.trim() || "No active session"}
+                  </Text>
+                  <Text style={styles.metaLabel}>Tokens Used</Text>
+                  <Text style={styles.metaValue}>
+                    {formatTokenUsage(tokenUsage)}
+                  </Text>
+                </View>
+                <View style={styles.uploadActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => void handleTakePhoto()}
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      pressed ? styles.secondaryButtonPressed : null,
+                    ]}
+                  >
+                    <Text style={styles.secondaryButtonText}>Take Photo</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => void handlePickFiles()}
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      pressed ? styles.secondaryButtonPressed : null,
+                    ]}
+                  >
+                    <Text style={styles.secondaryButtonText}>Upload File</Text>
+                  </Pressable>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!attachments.length || uploadBusy}
+                  onPress={() => void handleSendAttachments()}
+                  style={({ pressed }) => [
+                    styles.uploadSendButton,
+                    !attachments.length || uploadBusy ? styles.resetButtonDisabled : null,
+                    pressed && attachments.length && !uploadBusy ? styles.resetButtonPressed : null,
+                  ]}
+                >
+                  <Text style={styles.uploadSendButtonText}>
+                    {uploadBusy ? "Sending..." : "Send Attached Files"}
+                  </Text>
+                </Pressable>
+                {attachments.length ? (
+                  <View style={styles.attachmentList}>
+                    {attachments.map((attachment, index) => (
+                      <Pressable
+                        key={`${attachment.name}-${attachment.uri}`}
+                        onPress={() => handleRemoveAttachment(index)}
+                        style={({ pressed }) => [
+                          styles.attachmentChip,
+                          pressed ? styles.attachmentChipPressed : null,
+                        ]}
+                      >
+                        <Text style={styles.attachmentChipText}>{attachment.name}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </View>
-            ) : null}
-          </View>
 
-          <View style={styles.transcriptCard}>
-            <Text style={styles.sectionLabel}>{panelLabel}</Text>
-            <ScrollView
-              style={styles.panelScroll}
-              contentContainerStyle={styles.panelScrollContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={displayReply}
-            >
-              <Text style={displayReply ? styles.replyText : styles.transcriptText}>
-                {panelText}
-              </Text>
-            </ScrollView>
-          </View>
+              <View style={styles.transcriptCard}>
+                <Text style={styles.sectionLabel}>{panelLabel}</Text>
+                <ScrollView
+                  style={styles.panelScroll}
+                  contentContainerStyle={styles.panelScrollContent}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={displayReply}
+                >
+                  <Text style={displayReply ? styles.replyText : styles.transcriptText}>
+                    {panelText}
+                  </Text>
+                </ScrollView>
+              </View>
 
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={buttonDisabled}
-            onPress={() => void handleMainButtonPress()}
-            style={({ pressed }) => [
-              styles.button,
-              buttonDisabled ? styles.buttonDisabled : null,
-              pressed && !buttonDisabled ? styles.buttonPressed : null,
-            ]}
-          >
-            {status === "checking" ? (
-              <ActivityIndicator color="#f4efe6" />
-            ) : (
-              <Text style={styles.buttonText}>{getButtonLabel(status)}</Text>
-            )}
-          </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={buttonDisabled}
+                onPress={() => void handleMainButtonPress()}
+                style={({ pressed }) => [
+                  styles.button,
+                  buttonDisabled ? styles.buttonDisabled : null,
+                  pressed && !buttonDisabled ? styles.buttonPressed : null,
+                ]}
+              >
+                {status === "checking" ? (
+                  <ActivityIndicator color="#f4efe6" />
+                ) : (
+                  <Text style={styles.buttonText}>{getButtonLabel(status)}</Text>
+                )}
+              </Pressable>
 
-          <Text style={styles.statusText}>{getStatusMessage(status)}</Text>
+              <Text style={styles.statusText}>{getStatusMessage(status)}</Text>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -885,6 +1049,86 @@ async function requestAssistantReply(
   };
 }
 
+async function requestFormAutofill(sessionId: string, currentForm: FormState) {
+  const prompt = buildFormFillPrompt(currentForm);
+  const { assistantReply, sessionId: nextSessionId } = await requestAssistantReply(
+    prompt,
+    sessionId
+  );
+
+  const payload = extractJsonPayload(assistantReply);
+  if (!payload || typeof payload !== "object") {
+    throw new Error("The assistant returned invalid form data.");
+  }
+
+  const sanitized = sanitizeFormFillPayload(payload as FormFillPayload, currentForm);
+
+  return {
+    formData: sanitized,
+    sessionId: nextSessionId,
+  };
+}
+
+function buildFormFillPrompt(currentForm: FormState) {
+  return `Use the existing conversation to fill out the application form fields.
+Return only valid JSON with the exact keys listed below. Use null for unknown fields.
+Do not include commentary or markdown.
+
+Fields:
+fullName, dateOfBirth, phone, email, nationality, idNumber, addressLine1, city,
+serviceType, preferredCenter, appointmentDate, appointmentTime, notes, complete
+
+Current form values (may be partial):
+${JSON.stringify(currentForm, null, 2)}`;
+}
+
+function extractJsonPayload(reply: string): unknown | null {
+  const trimmed = reply.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Continue to extraction attempts.
+  }
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch && fencedMatch[1]) {
+    try {
+      return JSON.parse(fencedMatch[1]);
+    } catch {
+      // Ignore and fall through.
+    }
+  }
+
+  const objectMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (objectMatch) {
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function sanitizeFormFillPayload(payload: FormFillPayload, current: FormState) {
+  const keys = Object.keys(current) as Array<keyof FormState>;
+  return keys.reduce((next, key) => {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) {
+      return { ...next, [key]: value.trim() };
+    }
+    if (value === null) {
+      return next;
+    }
+    return next;
+  }, current);
+}
+
 function normalizeTokenUsage(tokenUsage?: Partial<TokenUsage> | null): TokenUsage {
   return {
     prompt_tokens: Math.max(0, Number(tokenUsage?.prompt_tokens || 0)),
@@ -1006,6 +1250,101 @@ const styles = StyleSheet.create({
     gap: 16,
     backgroundColor: "#eef3fb",
     flexGrow: 1,
+  },
+  formCard: {
+    padding: 20,
+    borderRadius: 24,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#c7d4eb",
+    gap: 16,
+    shadowColor: "#0f3d91",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3,
+  },
+  formHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  formTitle: {
+    color: "#0f3d91",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  formSubtitle: {
+    color: "#56709b",
+    fontSize: 13,
+    marginTop: 2,
+  },
+  aiButton: {
+    minWidth: 56,
+    height: 42,
+    borderRadius: 16,
+    backgroundColor: "#0f3d91",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  aiButtonPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  aiButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+  },
+  formField: {
+    gap: 8,
+  },
+  formLabel: {
+    color: "#1c3f78",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  formInput: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#b9cae6",
+    backgroundColor: "#f7faff",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: "#10284c",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  formMessage: {
+    color: "#0f3d91",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  aiHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  aiExitButton: {
+    minHeight: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#b9cae6",
+    backgroundColor: "#edf4ff",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  aiExitButtonText: {
+    color: "#0f3d91",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
   controlsCard: {
     padding: 18,
