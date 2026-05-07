@@ -40,7 +40,8 @@ from pathlib import Path
 from typing import Any
 
 from .blueprint import Blueprint, BlueprintField, DataSourceConfig, FieldType
-from .config import BACKEND_DIR, SUBMISSIONS_DIR
+from .config import BACKEND_DIR
+from .repositories import reference_data_repository, submission_repository
 
 
 # ---------------------------------------------------------------------------
@@ -51,26 +52,17 @@ _DATA_DIR = BACKEND_DIR / "data"
 
 
 def _submission_path(session_id: str, blueprint_id: str) -> Path:
-    safe_bid = re.sub(r"[^a-z0-9_-]", "_", blueprint_id.lower())
-    return SUBMISSIONS_DIR / f"{session_id}__{safe_bid}.json"
+    return submission_repository.blueprint_path(session_id, blueprint_id)
 
 
 def _load_raw(path: Path) -> dict[str, Any]:
     """Load a submission JSON file from disk. Returns {} if file is absent."""
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8") as fh:
-        data = json.load(fh)
-    if not isinstance(data, dict):
-        return {}
-    return data
+    return submission_repository.load_path(path)
 
 
 def _save_raw(path: Path, data: dict[str, Any]) -> None:
     """Atomically write submission state to disk."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=2)
+    submission_repository.save_path(path, data)
 
 
 # ---------------------------------------------------------------------------
@@ -257,29 +249,7 @@ def _load_data_file(path_str: str) -> list[Any]:
       - path relative to project root
       - absolute paths (rejected for security)
     """
-    rel = Path(path_str)
-    if rel.is_absolute():
-        raise ValueError(f"data_source path must be relative, got: {path_str}")
-
-    candidate = BACKEND_DIR / rel
-    if not candidate.exists():
-        raise FileNotFoundError(f"Data file not found: {candidate}")
-
-    with candidate.open("r", encoding="utf-8") as fh:
-        raw = json.load(fh)
-
-    if isinstance(raw, list):
-        return raw
-    if isinstance(raw, dict):
-        # Try common keys
-        for key in ("items", "data", "results", "values"):
-            if isinstance(raw.get(key), list):
-                return raw[key]
-        raise ValueError(
-            f"Data file {path_str} is a JSON object but no array key was found. "
-            "Set data_source.array_key explicitly."
-        )
-    return []
+    return reference_data_repository.load_rows(path_str)
 
 
 def _extract_options(

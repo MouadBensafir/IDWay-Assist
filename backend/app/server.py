@@ -25,6 +25,7 @@ from .document_utils import build_document_payload
 from .form_engine import fetch_field_options
 from .models import DeleteSessionResponse, PromptRequest, PromptResponse
 from .ollama_client import extract_token_usage, ollama_chat_completion
+from .repositories import blueprint_repository, submission_repository
 from .session_store import (
     SessionState,
     cache_documents,
@@ -217,6 +218,7 @@ ASSISTANT_TOOLS = [
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    submission_repository.ensure_directories()
     TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
     SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -718,9 +720,7 @@ def save_current_form(session: SessionState, form_data: dict[str, Any]) -> None:
         raise HTTPException(status_code=500, detail="Submission path is missing for this session.")
 
     submission_path = Path(session.submission_path)
-    submission_path.parent.mkdir(parents=True, exist_ok=True)
-    with submission_path.open("w", encoding="utf-8") as file_handle:
-        json.dump(form_data, file_handle, ensure_ascii=False, indent=2)
+    submission_repository.save_path(submission_path, form_data)
 
 
 def create_submission_from_template(session_id: str, service_name: str) -> Path:
@@ -895,14 +895,8 @@ def get_service_blueprint(service_name: str | None) -> Blueprint | None:
     template_name = normalize_optional_string(service_config.get("template"))
     if not template_name:
         return None
-
-    blueprint_path = BACKEND_DIR / "data" / "blueprints" / template_name
-    if not blueprint_path.exists():
-        return None
-
-    with blueprint_path.open("r", encoding="utf-8") as file_handle:
-        raw = json.load(file_handle)
-    return Blueprint.model_validate(raw)
+    blueprint_id = Path(template_name).stem
+    return blueprint_repository.get(blueprint_id)
 
 
 def is_filled_value(value: Any) -> bool:
@@ -1023,9 +1017,7 @@ def load_current_form(session: SessionState) -> dict[str, Any] | None:
     if not submission_path.exists():
         return None
 
-    with submission_path.open("r", encoding="utf-8") as file_handle:
-        data = json.load(file_handle)
-
+    data = submission_repository.load_path(submission_path)
     if not isinstance(data, dict):
         raise HTTPException(status_code=500, detail="Stored submission file is invalid.")
 
@@ -1038,22 +1030,20 @@ def load_current_form(session: SessionState) -> dict[str, Any] | None:
 def create_submission_from_template(session_id: str, service_name: str) -> Path:
     blueprint = get_service_blueprint(service_name)
     if blueprint is not None:
-        form_data = {field.key: None for field in blueprint.fields}
-    else:
-        service_config = SERVICE_CATALOG[service_name]
-        template_path = TEMPLATES_DIR / str(service_config["template"])
-        if not template_path.exists():
-            raise HTTPException(status_code=500, detail=f"Template not found for {service_name}.")
+        return submission_repository.create_from_blueprint(
+            session_id,
+            blueprint,
+            legacy_service_name=service_name,
+        )
 
-        with template_path.open("r", encoding="utf-8") as file_handle:
-            form_data = json.load(file_handle)
-
-    safe_service_name = re.sub(r"[^a-z0-9]+", "_", service_name.lower()).strip("_")
-    submission_path = SUBMISSIONS_DIR / f"{session_id}_{safe_service_name}.json"
-    with submission_path.open("w", encoding="utf-8") as file_handle:
-        json.dump(form_data, file_handle, ensure_ascii=False, indent=2)
-
-    return submission_path
+    service_config = SERVICE_CATALOG[service_name]
+    template_name = str(service_config["template"])
+    try:
+        return submission_repository.create_from_template(session_id, service_name, template_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=500, detail=f"Template not found for {service_name}.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def build_state_summary(session: SessionState) -> str:

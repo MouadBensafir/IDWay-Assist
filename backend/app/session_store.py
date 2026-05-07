@@ -5,6 +5,8 @@ from threading import Lock
 from typing import Any
 from uuid import uuid4
 
+from .repositories import session_repository
+
 
 @dataclass
 class TokenUsage:
@@ -36,18 +38,18 @@ class SessionState:
     has_received_document: bool = False
 
 
-_SESSIONS: dict[str, SessionState] = {}
 _LOCK = Lock()
 
 
 def get_or_create_session(session_id: str | None, reset: bool = False) -> SessionState:
     with _LOCK:
-        if session_id and not reset and session_id in _SESSIONS:
-            return _SESSIONS[session_id]
+        existing = session_repository.get(session_id) if session_id and not reset else None
+        if existing is not None:
+            return existing
 
         next_session_id = session_id or uuid4().hex
         state = SessionState(session_id=next_session_id)
-        _SESSIONS[next_session_id] = state
+        session_repository.put(state)
         return state
 
 
@@ -90,19 +92,16 @@ def cache_documents(
 
 
 def get_session_count() -> int:
-    with _LOCK:
-        return len(_SESSIONS)
+    return session_repository.count()
 
 
 def delete_session(session_id: str) -> bool:
-    with _LOCK:
-        session = _SESSIONS.pop(session_id, None)
-        if session is None:
-            return False
-        # Free cached document memory explicitly
-        session.cached_vision_parts.clear()
-        session.cached_text_blocks.clear()
-        return True
+    session = session_repository.delete(session_id)
+    if session is None:
+        return False
+    session.cached_vision_parts.clear()
+    session.cached_text_blocks.clear()
+    return True
 
 
 def record_token_usage(

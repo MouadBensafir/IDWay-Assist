@@ -46,10 +46,11 @@ from .blueprint import (
     RegisterBlueprintRequest,
     RegisterBlueprintResponse,
 )
-from .config import OLLAMA_MODEL, RECENT_MESSAGE_COUNT, SUBMISSIONS_DIR
+from .config import OLLAMA_MODEL, RECENT_MESSAGE_COUNT
 from .document_utils import build_document_payload
-from .form_engine import apply_tool_call, prepare_turn
+from .form_engine import _submission_path, apply_tool_call, prepare_turn
 from .ollama_client import extract_token_usage, ollama_chat_completion
+from .repositories import blueprint_repository, submission_repository
 from .session_store import (
     SessionState,
     delete_session,
@@ -61,15 +62,8 @@ from .session_store import (
 
 dynamic_router = APIRouter(prefix="/dynamic", tags=["Dynamic Schema-Driven"])
 
-# ---------------------------------------------------------------------------
-# In-process Blueprint registry
-# ---------------------------------------------------------------------------
-
-_BLUEPRINT_REGISTRY: dict[str, Blueprint] = {}
-
-
 def _get_blueprint(blueprint_id: str) -> Blueprint:
-    bp = _BLUEPRINT_REGISTRY.get(blueprint_id)
+    bp = blueprint_repository.get(blueprint_id)
     if bp is None:
         raise HTTPException(
             status_code=404,
@@ -87,7 +81,7 @@ def _get_blueprint(blueprint_id: str) -> Blueprint:
 async def register_blueprint(body: RegisterBlueprintRequest) -> RegisterBlueprintResponse:
     """Register or overwrite a Blueprint. Idempotent."""
     bp = body.blueprint
-    _BLUEPRINT_REGISTRY[bp.blueprint_id] = bp
+    blueprint_repository.save(bp)
     return RegisterBlueprintResponse(
         blueprint_id=bp.blueprint_id,
         field_count=len(bp.fields),
@@ -97,7 +91,7 @@ async def register_blueprint(body: RegisterBlueprintRequest) -> RegisterBlueprin
 @dynamic_router.get("/blueprints", response_model=list[str])
 async def list_blueprints() -> list[str]:
     """List all registered blueprint IDs."""
-    return list(_BLUEPRINT_REGISTRY.keys())
+    return blueprint_repository.list_ids()
 
 
 @dynamic_router.get("/blueprints/{blueprint_id}", response_model=Blueprint)
@@ -109,9 +103,8 @@ async def get_blueprint(blueprint_id: str) -> Blueprint:
 @dynamic_router.delete("/blueprints/{blueprint_id}")
 async def delete_blueprint(blueprint_id: str) -> dict[str, Any]:
     """Unregister a Blueprint."""
-    if blueprint_id not in _BLUEPRINT_REGISTRY:
+    if not blueprint_repository.delete(blueprint_id):
         raise HTTPException(status_code=404, detail=f"Blueprint '{blueprint_id}' not found.")
-    del _BLUEPRINT_REGISTRY[blueprint_id]
     return {"blueprint_id": blueprint_id, "deleted": True}
 
 
@@ -129,12 +122,10 @@ async def get_session_state(session_id: str, blueprint_id: str) -> dict[str, Any
     filename includes the blueprint ID.
     """
     bp = _get_blueprint(blueprint_id)
-    from .form_engine import _submission_path, _load_raw  # noqa: PLC0415
-
     path = _submission_path(session_id, bp.blueprint_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="No submission found for this session.")
-    return _load_raw(path)
+    return submission_repository.load_path(path)
 
 
 @dynamic_router.delete("/sessions/{session_id}")
@@ -169,7 +160,7 @@ async def dynamic_chat(request: DynamicChatRequest) -> DynamicChatResponse:
     blueprint: Blueprint
     if request.blueprint is not None:
         blueprint = request.blueprint
-        _BLUEPRINT_REGISTRY[blueprint.blueprint_id] = blueprint
+        blueprint_repository.save(blueprint)
     else:
         assert request.blueprint_id is not None  # validated by model
         blueprint = _get_blueprint(request.blueprint_id)
