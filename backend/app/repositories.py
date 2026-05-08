@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Any
@@ -32,41 +31,29 @@ class JsonBlueprintRepository:
     def list_ids(self) -> list[str]:
         if not self.blueprints_dir.exists():
             return []
-        result: list[str] = []
-        for path in sorted(self.blueprints_dir.glob("*.json")):
-            try:
-                blueprint = self._load_path(path)
-            except Exception:
-                continue
-            result.append(blueprint.blueprint_id)
-        return result
+        return sorted(path.stem for path in self.blueprints_dir.glob("*.json"))
 
     def get(self, blueprint_id: str) -> Blueprint | None:
-        for path in self.blueprints_dir.glob("*.json"):
-            try:
-                blueprint = self._load_path(path)
-            except Exception:
-                continue
-            if blueprint.blueprint_id == blueprint_id:
-                return blueprint
-        return None
+        path = self._path_for_id(blueprint_id)
+        if not path.exists():
+            return None
+        return self._load_path(path)
 
     def save(self, blueprint: Blueprint) -> Path:
         self.blueprints_dir.mkdir(parents=True, exist_ok=True)
-        path = self.blueprints_dir / f"{blueprint.blueprint_id}.json"
+        path = self._path_for_id(blueprint.blueprint_id)
         _safe_json_write(path, blueprint.model_dump(mode="json"))
         return path
 
     def delete(self, blueprint_id: str) -> bool:
-        for path in self.blueprints_dir.glob("*.json"):
-            try:
-                blueprint = self._load_path(path)
-            except Exception:
-                continue
-            if blueprint.blueprint_id == blueprint_id:
-                path.unlink(missing_ok=True)
-                return True
-        return False
+        path = self._path_for_id(blueprint_id)
+        if not path.exists():
+            return False
+        path.unlink(missing_ok=True)
+        return True
+
+    def _path_for_id(self, blueprint_id: str) -> Path:
+        return self.blueprints_dir / f"{blueprint_id}.json"
 
     def _load_path(self, path: Path) -> Blueprint:
         with path.open("r", encoding="utf-8") as file_handle:
@@ -149,20 +136,6 @@ class JsonReferenceDataRepository:
                 "Set data_source.array_key explicitly."
             )
         return []
-
-
-@dataclass
-class SessionStateRecord:
-    session_id: str
-    messages: list[dict[str, Any]]
-    service_name: str | None
-    submission_path: str | None
-    completed: bool
-    token_usage: dict[str, int]
-    cached_vision_parts: list[dict[str, Any]]
-    cached_text_blocks: list[str]
-    has_received_document: bool
-
 
 class InMemorySessionRepository:
     def __init__(self) -> None:

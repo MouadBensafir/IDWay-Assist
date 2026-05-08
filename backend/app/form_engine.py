@@ -40,15 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from .blueprint import Blueprint, BlueprintField, DataSourceConfig, FieldType
-from .config import BACKEND_DIR
 from .repositories import reference_data_repository, submission_repository
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-_DATA_DIR = BACKEND_DIR / "data"
 
 
 def _submission_path(session_id: str, blueprint_id: str) -> Path:

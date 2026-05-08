@@ -47,7 +47,6 @@ from .blueprint import (
     RegisterBlueprintResponse,
 )
 from .config import OLLAMA_MODEL, RECENT_MESSAGE_COUNT
-from .document_utils import build_document_payload
 from .form_engine import _submission_path, apply_tool_call, prepare_turn
 from .ollama_client import extract_token_usage, ollama_chat_completion
 from .repositories import blueprint_repository, submission_repository

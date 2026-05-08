@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -11,14 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from .config import (
-    BACKEND_DIR,
     ASSISTANT_STYLE_PROMPT,
     MAX_TOOL_ROUNDS,
     OLLAMA_MODEL,
     RECENT_MESSAGE_COUNT,
-    SUBMISSIONS_DIR,
     SYSTEM_PROMPT,
-    TEMPLATES_DIR,
 )
 from .blueprint import Blueprint, BlueprintField, FieldType
 from .document_utils import build_document_payload
@@ -219,8 +215,6 @@ ASSISTANT_TOOLS = [
 @app.on_event("startup")
 async def startup_event() -> None:
     submission_repository.ensure_directories()
-    TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-    SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.get("/health")
@@ -664,80 +658,12 @@ def execute_tool_call(session: SessionState, tool_call: Any) -> dict[str, Any]:
     return {"ok": False, "error": f"Unknown tool: {function_name}"}
 
 
-def build_service_details(service_name: str) -> dict[str, Any]:
-    service_config = SERVICE_CATALOG[service_name]
-    return {
-        "name": service_name,
-        "description": service_config["description"],
-        "process": service_config["process"],
-        "required_fields": list(service_config["questions"].keys()),
-        "next_questions": service_config["questions"],
-    }
-
-
-def describe_submission_state(service_name: str | None, form_data: dict[str, Any]) -> dict[str, Any]:
-    missing_fields = get_missing_fields(form_data)
-    filled_fields = {
-        key: value
-        for key, value in form_data.items()
-        if isinstance(value, str) and value.strip()
-    }
-
-    return {
-        "service_name": service_name,
-        "filled_fields": filled_fields,
-        "missing_fields": missing_fields,
-        "next_question": get_next_question(service_name, missing_fields),
-        "is_complete": not missing_fields,
-    }
-
-
-def get_next_question(service_name: str | None, missing_fields: list[str]) -> str | None:
-    if not service_name or not missing_fields:
-        return None
-    return SERVICE_CATALOG[service_name]["questions"].get(missing_fields[0])
-
-
-def load_current_form(session: SessionState) -> dict[str, Any] | None:
-    if not session.submission_path:
-        return None
-
-    submission_path = Path(session.submission_path)
-    if not submission_path.exists():
-        return None
-
-    with submission_path.open("r", encoding="utf-8") as file_handle:
-        data = json.load(file_handle)
-
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=500, detail="Stored submission file is invalid.")
-
-    return data
-
-
 def save_current_form(session: SessionState, form_data: dict[str, Any]) -> None:
     if not session.submission_path:
         raise HTTPException(status_code=500, detail="Submission path is missing for this session.")
 
     submission_path = Path(session.submission_path)
     submission_repository.save_path(submission_path, form_data)
-
-
-def create_submission_from_template(session_id: str, service_name: str) -> Path:
-    service_config = SERVICE_CATALOG[service_name]
-    template_path = TEMPLATES_DIR / str(service_config["template"])
-    if not template_path.exists():
-        raise HTTPException(status_code=500, detail=f"Template not found for {service_name}.")
-
-    with template_path.open("r", encoding="utf-8") as file_handle:
-        form_data = json.load(file_handle)
-
-    safe_service_name = re.sub(r"[^a-z0-9]+", "_", service_name.lower()).strip("_")
-    submission_path = SUBMISSIONS_DIR / f"{session_id}_{safe_service_name}.json"
-    with submission_path.open("w", encoding="utf-8") as file_handle:
-        json.dump(form_data, file_handle, ensure_ascii=False, indent=2)
-
-    return submission_path
 
 
 def apply_field_updates(form_data: dict[str, Any], field_updates: dict[str, Any]) -> list[str]:
@@ -760,14 +686,6 @@ def apply_field_updates(form_data: dict[str, Any], field_updates: dict[str, Any]
         applied_updates.append(canonical_key)
 
     return applied_updates
-
-
-def get_missing_fields(form_data: dict[str, Any]) -> list[str]:
-    missing_fields: list[str] = []
-    for key, value in form_data.items():
-        if value is None or (isinstance(value, str) and not value.strip()):
-            missing_fields.append(key)
-    return missing_fields
 
 
 def extract_message_content(message: Any) -> str:
@@ -883,7 +801,6 @@ def coerce_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-@lru_cache(maxsize=None)
 def get_service_blueprint(service_name: str | None) -> Blueprint | None:
     if not service_name:
         return None
