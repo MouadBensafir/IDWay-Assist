@@ -53,166 +53,7 @@ app.include_router(workflow_router)
 # ────────────────────────────────────────────────────────────────────────────
 
 
-SERVICE_CATALOG = {
-    "ID Renewal": {
-        "template": "id_renewal.json",
-        "description": "Renew an existing ID card by confirming personal details and current document information.",
-        "process": [
-            "Select the renewal service.",
-            "Provide or extract identity details from the current document.",
-            "Confirm personal details and current address.",
-            "Review the collected data and complete the request.",
-        ],
-        "questions": {
-            "Full Name": "What is your full name as it should appear on the renewal request?",
-            "Date of Birth": "What is your date of birth?",
-            "Current ID Number": "What is your current ID number?",
-            "Expiry Date": "What is the expiry date on your current ID?",
-            "Address": "What is your current address?",
-            "Blood Type": "What is your blood type?",
-        },
-    },
-    "VISA Appointment": {
-        "template": "visa_appointment.json",
-        "description": "Book a visa appointment by collecting passport details, travel purpose, and a preferred appointment date.",
-        "process": [
-            "Choose the visa appointment service.",
-            "Provide passport and nationality information.",
-            "Specify destination country and travel purpose.",
-            "Pick the desired appointment date and review the request.",
-        ],
-        "questions": {
-            "Full Name": "What is your full name as it appears on your passport?",
-            "Passport Number": "What is your passport number?",
-            "Nationality": "What is your nationality?",
-            "Destination Country": "Which country are you traveling to?",
-            "Purpose of Travel": "What is the purpose of your travel?",
-            "Desired Appointment Date": "What appointment date would you prefer?",
-        },
-    },
-    "Driving License Renewal": {
-        "template": "driving_license_renewal.json",
-        "description": "Renew a driving license by confirming license details, vehicle class, and vision status.",
-        "process": [
-            "Select the driving license renewal service.",
-            "Provide license details or upload the current license.",
-            "Confirm vehicle class and issue date.",
-            "Confirm vision test status and review the request.",
-        ],
-        "questions": {
-            "Full Name": "What is your full name as it appears on your license?",
-            "License Number": "What is your license number?",
-            "Vehicle Class": "What vehicle class is on your license?",
-            "Issue Date": "What is the issue date on your current license?",
-            "Vision Test Status": "What is your current vision test status?",
-        },
-    },
-}
 
-SERVICE_ALIASES = {
-    "id renewal": "ID Renewal",
-    "id card renewal": "ID Renewal",
-    "renew id": "ID Renewal",
-    "visa appointment": "VISA Appointment",
-    "visa": "VISA Appointment",
-    "driving license renewal": "Driving License Renewal",
-    "driver license renewal": "Driving License Renewal",
-    "license renewal": "Driving License Renewal",
-}
-
-ASSISTANT_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "list_services",
-            "description": "List all available company services with short descriptions.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_service_details",
-            "description": "Get the description, process, required fields, and current questions for a service.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "service_name": {
-                        "type": "string",
-                        "description": "Canonical service name.",
-                    }
-                },
-                "required": ["service_name"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "select_service",
-            "description": "Select a service for the current session and create its submission record if needed.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "service_name": {
-                        "type": "string",
-                        "description": "Canonical service name or close alias.",
-                    }
-                },
-                "required": ["service_name"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_submission_state",
-            "description": "Read the current submission database record for this session, including filled and missing fields.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "update_submission_fields",
-            "description": "Update one or more form fields in the current submission database using grounded user or document data.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "fields": {
-                        "type": "object",
-                        "description": "Map of field name to extracted value.",
-                        "additionalProperties": {"type": "string"},
-                    }
-                },
-                "required": ["fields"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "complete_service_request",
-            "description": "Mark the current service request complete if no required fields are missing.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False,
-            },
-        },
-    },
-]
 
 
 @app.on_event("startup")
@@ -226,7 +67,6 @@ async def healthcheck() -> dict[str, Any]:
         "status": "ok",
         "model": OLLAMA_MODEL,
         "sessions": get_session_count(),
-        "services": list(SERVICE_CATALOG.keys()),
     }
 
 
@@ -341,7 +181,7 @@ async def run_assistant_turn(
     for _ in range(MAX_TOOL_ROUNDS):
         completion = await ollama_chat_completion(
             messages,
-            tools=ASSISTANT_TOOLS,
+            tools=None,
             temperature=0.1,
         )
         usage = extract_token_usage(completion)
@@ -440,46 +280,6 @@ def build_llm_messages(session: SessionState, user_content: list[dict[str, Any]]
     ]
 
 
-def build_state_summary(session: SessionState) -> str:
-    form_data = load_current_form(session)
-    blueprint = get_service_blueprint(session.service_name)
-    field_map = blueprint.field_map() if blueprint is not None else {}
-    missing_fields = get_missing_fields(form_data or {}, session.service_name)
-    filled_fields = get_filled_fields(form_data or {}, session.service_name)
-    service_name = session.service_name or "None"
-
-    doc_count = len(session.cached_vision_parts) + len(session.cached_text_blocks)
-    doc_status = (
-        f"{doc_count} document(s) cached — they are re-injected into every turn automatically"
-        if session.has_received_document
-        else "No documents uploaded yet this session"
-    )
-
-    parts = [
-        "=== CURRENT SESSION STATE ===",
-        f"Service: {service_name}",
-        f"Documents: {doc_status}",
-    ]
-
-    if filled_fields:
-        parts.append("\nAlready saved in submission:")
-        for key, val in filled_fields.items():
-            parts.append(f"  ✓ {key}: {val}")
-
-    if missing_fields:
-        parts.append("\nSTILL EMPTY (must be filled):")
-        for field_name in missing_fields:
-            parts.append(f"  ✗ {field_name}")
-        parts.append(
-            "\n>>> ACTION: If the user provides ANY of the above fields in this message, "
-            "you MUST call `update_submission_fields` to save them NOW. <<<"
-        )
-    else:
-        parts.append("\nAll fields are filled! Call `complete_service_request` to finish.")
-
-    return "\n".join(parts)
-
-
 def build_history_messages(session: SessionState) -> list[dict[str, Any]]:
     raw_messages = session.messages
     if raw_messages and str(raw_messages[-1].get("role") or "").strip().lower() == "user":
@@ -568,27 +368,8 @@ def execute_tool_call(session: SessionState, tool_call: Any) -> dict[str, Any]:
     function_name = str(function_payload.get("name") or "").strip()
     arguments = parse_tool_arguments(function_payload.get("arguments"))
 
-    if function_name == "list_services":
-        services = [
-            {
-                "name": service_name,
-                "description": service_config["description"],
-            }
-            for service_name, service_config in SERVICE_CATALOG.items()
-        ]
-        return {"ok": True, "services": services}
-
-    if function_name == "get_service_details":
-        service_name = normalize_service_name(arguments.get("service_name"))
-        if not service_name:
-            return {"ok": False, "error": "Unknown service name."}
-        return {
-            "ok": True,
-            "service": build_service_details(service_name),
-        }
-
     if function_name == "select_service":
-        service_name = normalize_service_name(arguments.get("service_name"))
+        service_name = normalize_optional_string(arguments.get("service_name"))
         if not service_name:
             return {"ok": False, "error": "Unknown service name."}
 
@@ -771,15 +552,7 @@ def parse_tool_arguments(raw_arguments: Any) -> dict[str, Any]:
     return parse_json_object(str(raw_arguments or "{}"))
 
 
-def normalize_service_name(value: Any) -> str | None:
-    normalized = normalize_optional_string(value)
-    if normalized is None:
-        return None
 
-    if normalized in SERVICE_CATALOG:
-        return normalized
-
-    return SERVICE_ALIASES.get(normalized.lower())
 
 
 def normalize_optional_string(value: Any) -> str | None:
@@ -808,14 +581,9 @@ def get_service_blueprint(service_name: str | None) -> Blueprint | None:
     if not service_name:
         return None
 
-    service_config = SERVICE_CATALOG.get(service_name)
-    if not service_config:
-        return None
-
-    template_name = normalize_optional_string(service_config.get("template"))
-    if not template_name:
-        return None
-    blueprint_id = Path(template_name).stem
+    # Blueprints are now loaded directly from the blueprint repository,
+    # not from the service catalog (which no longer exists)
+    blueprint_id = service_name.lower().replace(" ", "_")
     return blueprint_repository.get(blueprint_id)
 
 
@@ -833,73 +601,27 @@ def _dependencies_met(field: BlueprintField, form_data: dict[str, Any]) -> bool:
     return all(is_filled_value(form_data.get(dep)) for dep in field.depends_on)
 
 
-def sync_form_data_with_blueprint(service_name: str | None, form_data: dict[str, Any]) -> bool:
-    blueprint = get_service_blueprint(service_name)
-    if blueprint is None:
-        return False
-
-    changed = False
-    normalized_keys = {normalize_key(key): key for key in list(form_data.keys())}
-
-    for field in blueprint.fields:
-        if field.key in form_data:
-            continue
-
-        legacy_key = normalized_keys.get(normalize_key(field.label))
-        legacy_value = form_data.get(legacy_key) if legacy_key else None
-        form_data[field.key] = legacy_value if is_filled_value(legacy_value) else None
-        changed = True
-
-    return changed
-
-
 def get_missing_fields(form_data: dict[str, Any], service_name: str | None = None) -> list[str]:
     blueprint = get_service_blueprint(service_name)
-    if blueprint is not None:
-        return [
-            field.key
-            for field in blueprint.fields
-            if field.required and not is_filled_value(form_data.get(field.key))
-        ]
-
-    missing_fields: list[str] = []
-    for key, value in form_data.items():
-        if not is_filled_value(value):
-            missing_fields.append(key)
-    return missing_fields
+    if blueprint is None:
+        return []
+    return [
+        field.key
+        for field in blueprint.fields
+        if field.required and not is_filled_value(form_data.get(field.key))
+    ]
 
 
 def get_filled_fields(form_data: dict[str, Any], service_name: str | None = None) -> dict[str, Any]:
     blueprint = get_service_blueprint(service_name)
-    if blueprint is not None:
-        return {
-            field.key: form_data[field.key]
-            for field in blueprint.fields
-            if field.key in form_data and is_filled_value(form_data.get(field.key))
-        }
-
+    if blueprint is None:
+        return {}
     return {
-        key: value
-        for key, value in form_data.items()
-        if is_filled_value(value)
+        field.key: form_data[field.key]
+        for field in blueprint.fields
+        if field.key in form_data and is_filled_value(form_data.get(field.key))
     }
 
-
-def build_service_details(service_name: str) -> dict[str, Any]:
-    service_config = SERVICE_CATALOG[service_name]
-    blueprint = get_service_blueprint(service_name)
-    required_fields = (
-        [field.label for field in blueprint.fields if field.required]
-        if blueprint is not None
-        else list(service_config["questions"].keys())
-    )
-    return {
-        "name": service_name,
-        "description": service_config["description"],
-        "process": service_config["process"],
-        "required_fields": required_fields,
-        "next_questions": service_config["questions"],
-    }
 
 
 def get_next_question(service_name: str | None, missing_fields: list[str]) -> str | None:
@@ -913,7 +635,7 @@ def get_next_question(service_name: str | None, missing_fields: list[str]) -> st
             return None
         return field.hint or f"Please provide your {field.label.lower()}."
 
-    return SERVICE_CATALOG[service_name]["questions"].get(missing_fields[0])
+    return None
 
 
 def describe_submission_state(service_name: str | None, form_data: dict[str, Any]) -> dict[str, Any]:
@@ -941,9 +663,6 @@ def load_current_form(session: SessionState) -> dict[str, Any] | None:
     if not isinstance(data, dict):
         raise HTTPException(status_code=500, detail="Stored submission file is invalid.")
 
-    if sync_form_data_with_blueprint(session.service_name, data):
-        save_current_form(session, data)
-
     return data
 
 
@@ -956,14 +675,11 @@ def create_submission_from_template(session_id: str, service_name: str) -> Path:
             legacy_service_name=service_name,
         )
 
-    service_config = SERVICE_CATALOG[service_name]
-    template_name = str(service_config["template"])
-    try:
-        return submission_repository.create_from_template(session_id, service_name, template_name)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=500, detail=f"Template not found for {service_name}.") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    # If no blueprint exists, this is an error - all services must have blueprints
+    raise HTTPException(
+        status_code=500,
+        detail=f"No blueprint found for service '{service_name}'. Service catalog is no longer supported."
+    )
 
 
 def build_state_summary(session: SessionState) -> str:

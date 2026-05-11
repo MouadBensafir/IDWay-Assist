@@ -84,20 +84,6 @@ class JsonSubmissionRepository:
     def save_path(self, path: Path, data: dict[str, Any]) -> None:
         _safe_json_write(path, data)
 
-    def create_from_template(self, session_id: str, service_name: str, template_name: str) -> Path:
-        template_path = self.templates_dir / template_name
-        if not template_path.exists():
-            raise FileNotFoundError(f"Template not found: {template_path}")
-
-        with template_path.open("r", encoding="utf-8") as file_handle:
-            form_data = json.load(file_handle)
-        if not isinstance(form_data, dict):
-            raise ValueError(f"Template {template_path} must contain a JSON object.")
-
-        path = self.legacy_path(session_id, service_name)
-        self.save_path(path, form_data)
-        return path
-
     def create_from_blueprint(self, session_id: str, blueprint: Blueprint, legacy_service_name: str | None = None) -> Path:
         form_data = {field.key: None for field in blueprint.fields}
         path = (

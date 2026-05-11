@@ -1,0 +1,20 @@
+{
+  "workflow_session_id": "187f05134fba419580eabbbef5f550a7",
+  "workflow_id": "us_nonimmigrant_visa",
+  "step_statuses": {
+    "determine_visa_category": "in_progress",
+    "complete_ds160": "locked",
+    "create_appointment_profile": "locked",
+    "pay_mrv_fee": "locked",
+    "verify_payment": "locked",
+    "schedule_biometrics": "locked",
+    "schedule_interview": "locked",
+    "confirm_documents": "locked"
+  },
+  "step_chat_session_ids": {
+    "determine_visa_category": "f1a5bc26b0a14deab077b422b2d6327f"
+  },
+  "step_submissions": {},
+  "pre_filled": {},
+  "workflow_complete": false
+}
