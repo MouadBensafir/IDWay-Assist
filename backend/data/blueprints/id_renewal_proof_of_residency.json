@@ -1,0 +1,30 @@
+{
+  "blueprint_id": "id_renewal_proof_of_residency",
+  "title": "Gather Proof Of Residency",
+  "description": "Collect two physical documents showing the user's current in-state residential address.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Help the user confirm the physical residency documents they will bring to the DMV.",
+  "fields": [
+    {
+      "key": "residential_address",
+      "label": "Residential Address",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the full in-state residential address where the user currently lives."
+    },
+    {
+      "key": "residency_document_one",
+      "label": "Residency Document One",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the first proof-of-residency document, such as a signed lease, utility bill, or bank statement."
+    },
+    {
+      "key": "residency_document_two",
+      "label": "Residency Document Two",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the second proof-of-residency document, such as a university transcript, insurance statement, or other accepted physical mail."
+    }
+  ],
+  "completion_message": "Residency documents captured. Continue with the state-specific renewal application."
+}

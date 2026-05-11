@@ -1,0 +1,38 @@
+{
+  "blueprint_id": "id_renewal_temporary_documentation",
+  "title": "Obtain Temporary Documentation",
+  "description": "Confirm that the user received a temporary paper ID and that the final card will be mailed to the correct address.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Close the renewal process by confirming temporary documentation and mailing details.",
+  "fields": [
+    {
+      "key": "temporary_id_received",
+      "label": "Temporary ID Received",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the DMV issued a temporary paper ID on-site.",
+      "enum_values": [
+        "Yes",
+        "No"
+      ]
+    },
+    {
+      "key": "mailing_address_confirmed",
+      "label": "Mailing Address Confirmed",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the address for mailing the final card has been confirmed.",
+      "enum_values": [
+        "Yes",
+        "No"
+      ]
+    },
+    {
+      "key": "temporary_id_valid_until",
+      "label": "Temporary ID Valid Until",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the expiration date of the temporary ID or note the validity wording provided by the state."
+    }
+  ],
+  "completion_message": "State ID renewal workflow complete. The temporary document and mailing details are now recorded."
+}

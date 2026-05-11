@@ -1,0 +1,30 @@
+{
+  "blueprint_id": "id_renewal_identify_state_authority",
+  "title": "Identify State Authority",
+  "description": "Identify the correct US state DMV or licensing authority because renewal rules, portals, documents, and fees vary by jurisdiction.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Help the user identify the correct state authority before moving to the next renewal step.",
+  "fields": [
+    {
+      "key": "state_of_residence",
+      "label": "State of Residence",
+      "field_type": "text",
+      "required": true,
+      "hint": "Ask which US state issued the current ID or where the user currently lives."
+    },
+    {
+      "key": "state_authority_name",
+      "label": "State Authority Name",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the exact agency name, such as DMV, MVD, BMV, or Department of Public Safety."
+    },
+    {
+      "key": "state_authority_website",
+      "label": "State Authority Website",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the official website or renewal portal URL for the state authority."
+    }
+  ],
+  "completion_message": "State authority identified. Continue by confirming the allowed renewal method for this jurisdiction."
+}

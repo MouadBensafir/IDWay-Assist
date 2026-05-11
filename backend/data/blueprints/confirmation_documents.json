@@ -1,0 +1,46 @@
+{
+  "blueprint_id": "confirmation_documents",
+  "title": "Confirmation Documents",
+  "description": "Generate and confirm download of the Appointment Confirmation letter and DS-160 Barcode page required for the visa interview.",
+  "assistant_persona": "You are IDWay Assist, a US visa document preparation specialist. Help the applicant confirm they have downloaded and printed all required documents.",
+  "fields": [
+    {
+      "key": "ds160_confirmation_number",
+      "label": "DS-160 Confirmation Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "DS-160 confirmation number (pre-filled from earlier step).",
+      "extractable_from_document": true
+    },
+    {
+      "key": "interview_confirmation_number",
+      "label": "Interview Appointment Confirmation Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "Interview confirmation number (pre-filled from earlier step).",
+      "extractable_from_document": true
+    },
+    {
+      "key": "appointment_letter_downloaded",
+      "label": "Appointment Confirmation Letter Downloaded",
+      "field_type": "boolean",
+      "required": true,
+      "hint": "Has the applicant successfully downloaded the Appointment Confirmation letter?"
+    },
+    {
+      "key": "ds160_barcode_downloaded",
+      "label": "DS-160 Barcode Page Downloaded",
+      "field_type": "boolean",
+      "required": true,
+      "hint": "Has the applicant successfully downloaded the DS-160 Barcode page?"
+    },
+    {
+      "key": "documents_printed",
+      "label": "Documents Printed",
+      "field_type": "boolean",
+      "required": true,
+      "hint": "Has the applicant printed both documents and confirmed they are ready for the interview?"
+    }
+  ],
+  "completion_message": "All documents are confirmed. The US Non-Immigrant Visa appointment process is complete. Bring your printed documents, valid passport, and passport photo to all appointments."
+}

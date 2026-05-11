@@ -1,0 +1,105 @@
+{
+  "workflow_id": "us_state_id_renewal",
+  "title": "US State ID Renewal",
+  "description": "Complete the standard US state identification-card renewal process, from identifying the correct DMV authority through temporary paper ID issuance and mailing.",
+  "steps": [
+    {
+      "step_id": "identify_state_authority",
+      "title": "1. Identify State Authority",
+      "description": "Locate the specific state's DMV or licensing authority website because rules, fees, and portals vary by jurisdiction.",
+      "blueprint_id": "id_renewal_identify_state_authority",
+      "depends_on": [],
+      "output_mappings": [
+        { "from_field": "state_of_residence", "to_step_id": "determine_renewal_method", "to_field": "state_of_residence" },
+        { "from_field": "state_of_residence", "to_step_id": "gather_identity_status_documents", "to_field": "state_of_residence" },
+        { "from_field": "state_authority_name", "to_step_id": "schedule_dmv_appointment", "to_field": "state_authority_name" },
+        { "from_field": "state_authority_website", "to_step_id": "complete_application_form", "to_field": "state_authority_website" }
+      ]
+    },
+    {
+      "step_id": "determine_renewal_method",
+      "title": "2. Determine Renewal Method",
+      "description": "Check whether the applicant is eligible for online renewal or must renew in person because lawful presence often must be re-verified.",
+      "blueprint_id": "id_renewal_determine_method",
+      "depends_on": [
+        "identify_state_authority"
+      ],
+      "output_mappings": [
+        { "from_field": "renewal_method", "to_step_id": "complete_application_form", "to_field": "renewal_method" },
+        { "from_field": "renewal_method", "to_step_id": "schedule_dmv_appointment", "to_field": "renewal_method" }
+      ]
+    },
+    {
+      "step_id": "gather_identity_status_documents",
+      "title": "3. Gather Identity And Status Documentation",
+      "description": "Collect the current state ID, Social Security evidence, passport, visa, I-94, and active I-20 or DS-2019 as applicable.",
+      "blueprint_id": "id_renewal_identity_status_documents",
+      "depends_on": [
+        "determine_renewal_method"
+      ],
+      "output_mappings": []
+    },
+    {
+      "step_id": "gather_proof_of_residency",
+      "title": "4. Gather Proof Of Residency",
+      "description": "Secure two physical documents proving the current in-state residential address.",
+      "blueprint_id": "id_renewal_proof_of_residency",
+      "depends_on": [
+        "gather_identity_status_documents"
+      ],
+      "output_mappings": [
+        { "from_field": "residential_address", "to_step_id": "obtain_temporary_documentation", "to_field": "residential_address" }
+      ]
+    },
+    {
+      "step_id": "complete_application_form",
+      "title": "5. Complete Application Form",
+      "description": "Pre-fill the state-specific renewal application online or prepare the paper form.",
+      "blueprint_id": "id_renewal_application_form",
+      "depends_on": [
+        "gather_proof_of_residency"
+      ],
+      "output_mappings": []
+    },
+    {
+      "step_id": "schedule_dmv_appointment",
+      "title": "6. Schedule DMV Appointment",
+      "description": "Book an in-person DMV appointment to avoid unpredictable walk-in queues.",
+      "blueprint_id": "id_renewal_schedule_dmv_appointment",
+      "depends_on": [
+        "complete_application_form"
+      ],
+      "output_mappings": []
+    },
+    {
+      "step_id": "complete_in_person_processing",
+      "title": "7. Complete In-Person Processing",
+      "description": "Present original documents, complete any screening, and take a new ID photo.",
+      "blueprint_id": "id_renewal_in_person_processing",
+      "depends_on": [
+        "schedule_dmv_appointment"
+      ],
+      "output_mappings": []
+    },
+    {
+      "step_id": "process_payment",
+      "title": "8. Process Payment",
+      "description": "Pay the state-mandated ID renewal fee using an accepted payment method.",
+      "blueprint_id": "id_renewal_payment",
+      "depends_on": [
+        "complete_in_person_processing"
+      ],
+      "output_mappings": []
+    },
+    {
+      "step_id": "obtain_temporary_documentation",
+      "title": "9. Obtain Temporary Documentation",
+      "description": "Receive the temporary paper ID and confirm the mailing address for the final REAL ID-compliant card.",
+      "blueprint_id": "id_renewal_temporary_documentation",
+      "depends_on": [
+        "process_payment"
+      ],
+      "output_mappings": []
+    }
+  ]
+}

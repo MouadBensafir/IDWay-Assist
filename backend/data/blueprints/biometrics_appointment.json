@@ -1,0 +1,90 @@
+{
+  "blueprint_id": "biometrics_appointment",
+  "title": "Biometrics Appointment (VAC)",
+  "description": "Schedule a biometrics appointment at the Visa Application Center (VAC) for fingerprints and photograph.",
+  "assistant_persona": "You are IDWay Assist, a US visa biometrics scheduling specialist. Help the applicant select an available VAC location, date, and time for their biometrics collection.",
+  "fields": [
+    {
+      "key": "vac_country",
+      "label": "VAC Country",
+      "field_type": "text",
+      "required": true,
+      "hint": "Country where the Visa Application Center (VAC) is located."
+    },
+    {
+      "key": "vac_city",
+      "label": "VAC City",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "City where the applicant will attend the biometrics appointment. Offer only enabled options.",
+      "data_source": {
+        "path": "data/cities.json",
+        "label_key": "name",
+        "value_key": "code",
+        "enabled_key": "enabled"
+      }
+    },
+    {
+      "key": "vac_center",
+      "label": "VAC Center",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Specific VAC center in the selected city. Offer only available centers.",
+      "data_source": {
+        "path": "data/centers.json",
+        "label_key": "name",
+        "value_key": "code",
+        "enabled_key": "enabled",
+        "filter": {
+          "field": "cityCode",
+          "from_field": "vac_city"
+        }
+      },
+      "depends_on": ["vac_city"]
+    },
+    {
+      "key": "biometrics_date",
+      "label": "Biometrics Appointment Date",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Select an available date for the biometrics appointment.",
+      "data_source": {
+        "path": "data/timeslots.json",
+        "label_key": "date",
+        "value_key": "date",
+        "filter": {
+          "field": "centerCode",
+          "from_field": "vac_center"
+        }
+      },
+      "depends_on": ["vac_center"]
+    },
+    {
+      "key": "biometrics_time",
+      "label": "Biometrics Appointment Time",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Select an available time slot for the biometrics appointment.",
+      "data_source": {
+        "path": "data/timeslots.json",
+        "label_key": "time",
+        "value_key": "time",
+        "items_key": "availableSlots",
+        "child_filter_key": "available",
+        "filter": {
+          "field": "centerCode",
+          "from_field": "vac_center"
+        }
+      },
+      "depends_on": ["vac_center", "biometrics_date"]
+    },
+    {
+      "key": "biometrics_confirmation_number",
+      "label": "Biometrics Appointment Confirmation Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "The confirmation number issued by the scheduling portal after booking the biometrics appointment."
+    }
+  ],
+  "completion_message": "Biometrics appointment scheduled. Proceed to book the consular interview appointment."
+}

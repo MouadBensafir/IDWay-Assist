@@ -1,0 +1,45 @@
+{
+  "blueprint_id": "id_renewal_application_form",
+  "title": "Complete Application Form",
+  "description": "Prepare the state-specific identification-card renewal application through the DMV portal or a printable form.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Help the user prepare the state renewal application before the DMV visit.",
+  "fields": [
+    {
+      "key": "state_authority_website",
+      "label": "State Authority Website",
+      "field_type": "text",
+      "required": true,
+      "hint": "This should carry forward from the state-authority step."
+    },
+    {
+      "key": "application_completion_mode",
+      "label": "Application Completion Mode",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the application is completed online or prepared as a printable paper form.",
+      "enum_values": [
+        "Completed in online portal",
+        "Prepared as printable paper form"
+      ]
+    },
+    {
+      "key": "application_status",
+      "label": "Application Status",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the renewal application has already been prepared.",
+      "enum_values": [
+        "Pre-filled and ready",
+        "Still needs to be completed"
+      ]
+    },
+    {
+      "key": "application_reference",
+      "label": "Application Reference",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record any application number, confirmation code, or note 'paper form only' if no digital reference exists."
+    }
+  ],
+  "completion_message": "Application step captured. Continue by scheduling the DMV appointment."
+}

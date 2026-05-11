@@ -1,0 +1,83 @@
+{
+  "blueprint_id": "consular_interview",
+  "title": "Consular Interview Appointment",
+  "description": "Schedule a formal interview appointment at the US Embassy or Consulate.",
+  "assistant_persona": "You are IDWay Assist, a US visa interview scheduling specialist. Help the applicant select an available Embassy or Consulate, date, and time for their visa interview.",
+  "fields": [
+    {
+      "key": "embassy_city",
+      "label": "Embassy / Consulate City",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "City of the US Embassy or Consulate where the interview will be held.",
+      "data_source": {
+        "path": "data/cities.json",
+        "label_key": "name",
+        "value_key": "code",
+        "enabled_key": "enabled"
+      }
+    },
+    {
+      "key": "embassy_center",
+      "label": "Embassy / Consulate",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Specific Embassy or Consulate in the selected city.",
+      "data_source": {
+        "path": "data/centers.json",
+        "label_key": "name",
+        "value_key": "code",
+        "enabled_key": "enabled",
+        "filter": {
+          "field": "cityCode",
+          "from_field": "embassy_city"
+        }
+      },
+      "depends_on": ["embassy_city"]
+    },
+    {
+      "key": "interview_date",
+      "label": "Interview Date",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Select an available date for the consular interview.",
+      "data_source": {
+        "path": "data/timeslots.json",
+        "label_key": "date",
+        "value_key": "date",
+        "filter": {
+          "field": "centerCode",
+          "from_field": "embassy_center"
+        }
+      },
+      "depends_on": ["embassy_center"]
+    },
+    {
+      "key": "interview_time",
+      "label": "Interview Time Slot",
+      "field_type": "dynamic_enum",
+      "required": true,
+      "hint": "Select an available time slot for the consular interview.",
+      "data_source": {
+        "path": "data/timeslots.json",
+        "label_key": "time",
+        "value_key": "time",
+        "items_key": "availableSlots",
+        "child_filter_key": "available",
+        "filter": {
+          "field": "centerCode",
+          "from_field": "embassy_center"
+        }
+      },
+      "depends_on": ["embassy_center", "interview_date"]
+    },
+    {
+      "key": "interview_confirmation_number",
+      "label": "Interview Confirmation Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "The confirmation number issued after booking the consular interview."
+    }
+  ],
+  "completion_message": "Consular interview appointment confirmed. Proceed to generate and download your confirmation documents."
+}

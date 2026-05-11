@@ -1,0 +1,38 @@
+{
+  "workflow_session_id": "08c9e72817ca4b5f98bb55267cfe57e7",
+  "workflow_id": "us_nonimmigrant_visa",
+  "step_statuses": {
+    "determine_visa_category": "completed",
+    "complete_ds160": "in_progress",
+    "create_appointment_profile": "locked",
+    "pay_mrv_fee": "locked",
+    "verify_payment": "locked",
+    "schedule_biometrics": "locked",
+    "schedule_interview": "locked",
+    "confirm_documents": "locked"
+  },
+  "step_chat_session_ids": {
+    "determine_visa_category": "3ac0f452b09d498cbbe65d1627673ab9",
+    "complete_ds160": "1f93be250a0d4324bc7d91f66112ecbc"
+  },
+  "step_submissions": {
+    "determine_visa_category": {
+      "full_name": "BENSAFIR MOUAD",
+      "nationality": "Marocaine",
+      "travel_purpose_description": "for tourism",
+      "visa_type": "B-2",
+      "intended_stay_duration": "11 days"
+    }
+  },
+  "pre_filled": {
+    "complete_ds160": {
+      "full_name": "BENSAFIR MOUAD",
+      "nationality": "Marocaine",
+      "purpose_of_trip": "B-2"
+    },
+    "confirm_documents": {
+      "full_name": "BENSAFIR MOUAD"
+    }
+  },
+  "workflow_complete": false
+}

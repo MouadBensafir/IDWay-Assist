@@ -1,0 +1,40 @@
+{
+  "blueprint_id": "mrv_fee_payment",
+  "title": "MRV Fee Payment",
+  "description": "Complete the non-refundable Machine-Readable Visa (MRV) fee payment and record the payment receipt details.",
+  "assistant_persona": "You are IDWay Assist, a US visa fee payment specialist. Guide the applicant through recording their MRV fee payment information.",
+  "fields": [
+    {
+      "key": "payment_method",
+      "label": "Payment Method",
+      "field_type": "enum",
+      "required": true,
+      "hint": "How was the MRV fee paid?",
+      "enum_values": ["Bank Transfer", "Credit/Debit Card (Online)", "Cash at Bank Branch", "Western Union Quick Pay"]
+    },
+    {
+      "key": "payment_receipt_number",
+      "label": "Payment Receipt Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "The transaction or receipt number issued after the MRV fee was paid.",
+      "extractable_from_document": true
+    },
+    {
+      "key": "payment_date",
+      "label": "Payment Date",
+      "field_type": "date",
+      "required": true,
+      "hint": "Date the MRV fee payment was completed (YYYY-MM-DD).",
+      "extractable_from_document": true
+    },
+    {
+      "key": "payment_amount_usd",
+      "label": "Amount Paid (USD)",
+      "field_type": "number",
+      "required": true,
+      "hint": "The MRV fee amount paid in US dollars (e.g., 185 for most B-1/B-2 visas)."
+    }
+  ],
+  "completion_message": "MRV fee payment recorded. Proceed to verify payment activation in the scheduling system."
+}

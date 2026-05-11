@@ -1,0 +1,38 @@
+{
+  "workflow_session_id": "71b83cbdc71a47c7b1c8bc9141d2783b",
+  "workflow_id": "us_nonimmigrant_visa",
+  "step_statuses": {
+    "determine_visa_category": "completed",
+    "complete_ds160": "in_progress",
+    "create_appointment_profile": "locked",
+    "pay_mrv_fee": "locked",
+    "verify_payment": "locked",
+    "schedule_biometrics": "locked",
+    "schedule_interview": "locked",
+    "confirm_documents": "locked"
+  },
+  "step_chat_session_ids": {
+    "determine_visa_category": "ed22568034144b91ba35e6cbe256c5d5",
+    "complete_ds160": "238b4aba6d6d4cc7b99d7faf71aa2325"
+  },
+  "step_submissions": {
+    "determine_visa_category": {
+      "full_name": "MOUAD BENSAFIR",
+      "nationality": "MAROCCAN",
+      "travel_purpose_description": "study",
+      "visa_type": "F-1 (Academic Student)",
+      "intended_stay_duration": "6 months"
+    }
+  },
+  "pre_filled": {
+    "complete_ds160": {
+      "full_name": "MOUAD BENSAFIR",
+      "nationality": "MAROCCAN",
+      "purpose_of_trip": "F-1 (Academic Student)"
+    },
+    "confirm_documents": {
+      "full_name": "MOUAD BENSAFIR"
+    }
+  },
+  "workflow_complete": false
+}

@@ -27,6 +27,7 @@ import appConfig from "../config.json";
 const DEFAULT_LOCALE = "en-US";
 const UNSUPPORTED_PLATFORM = Platform.OS === "web";
 const API_URL = getBackendUrl();
+const WORKFLOW_ID = getWorkflowId();
 
 type Status =
   | "checking"
@@ -849,19 +850,20 @@ async function requestAssistantReply(
   const requestPrompt = buildPrompt(prompt);
   const response = attachments.length
     ? await sendMultipartRequest(requestPrompt, sessionId, attachments)
-    : await fetch(`${API_URL}/chat`, {
+    : await fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           prompt: requestPrompt,
-          session_id: sessionId || undefined,
+          workflow_session_id: sessionId || undefined,
         }),
       });
 
   const payload = (await response.json().catch(() => null)) as
     | {
+        workflow_session_id?: string;
         session_id?: string;
         response?: string;
         detail?: string;
@@ -880,7 +882,7 @@ async function requestAssistantReply(
 
   return {
     assistantReply,
-    sessionId: payload?.session_id?.trim() || "",
+    sessionId: payload?.workflow_session_id?.trim() || payload?.session_id?.trim() || "",
     tokenUsage: normalizeTokenUsage(payload?.token_usage),
   };
 }
@@ -906,7 +908,7 @@ async function sendMultipartRequest(
   formData.append("prompt", prompt);
 
   if (sessionId?.trim()) {
-    formData.append("session_id", sessionId.trim());
+    formData.append("workflow_session_id", sessionId.trim());
   }
 
   attachments.forEach((attachment) => {
@@ -917,7 +919,7 @@ async function sendMultipartRequest(
     } as never);
   });
 
-  return fetch(`${API_URL}/chat`, {
+  return fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/chat`, {
     method: "POST",
     body: formData,
   });
@@ -930,7 +932,7 @@ async function deleteConversationSession(sessionId: string) {
   }
 
   try {
-    await fetch(`${API_URL}/sessions/${encodeURIComponent(trimmedSessionId)}`, {
+    await fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/sessions/${encodeURIComponent(trimmedSessionId)}`, {
       method: "DELETE",
     });
   } catch {
@@ -989,6 +991,15 @@ function getBackendUrl() {
   const defaultUrl = (configBackendUrl?.default || "").replace(/\/$/, "");
 
   return host ? defaultUrl : defaultUrl;
+}
+
+function getWorkflowId() {
+  const explicitId = process.env.EXPO_PUBLIC_WORKFLOW_ID?.trim();
+  if (explicitId) {
+    return explicitId;
+  }
+
+  return appConfig.mobile?.workflowId?.trim() || "us_nonimmigrant_visa";
 }
 
 const styles = StyleSheet.create({

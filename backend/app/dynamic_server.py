@@ -37,7 +37,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from .blueprint import (
     Blueprint,
@@ -47,11 +48,13 @@ from .blueprint import (
     RegisterBlueprintResponse,
 )
 from .config import OLLAMA_MODEL, RECENT_MESSAGE_COUNT
+from .document_utils import build_document_payload
 from .form_engine import _submission_path, apply_tool_call, prepare_turn
 from .ollama_client import extract_token_usage, ollama_chat_completion
 from .repositories import blueprint_repository, submission_repository
 from .session_store import (
     SessionState,
+    cache_documents,
     delete_session,
     get_token_usage,
     get_or_create_session,
@@ -140,37 +143,30 @@ async def remove_dynamic_session(session_id: str) -> dict[str, Any]:
 
 
 @dynamic_router.post("/chat", response_model=DynamicChatResponse)
-async def dynamic_chat(request: DynamicChatRequest) -> DynamicChatResponse:
-    """
-    Schema-driven conversational turn.
+async def dynamic_chat(request: Request) -> DynamicChatResponse:
+    session_id, blueprint, prompt, reset, files = await _parse_dynamic_chat_request(request)
+    session = get_or_create_session(session_id, reset=reset)
+    return await run_dynamic_blueprint_turn(
+        session=session,
+        blueprint=blueprint,
+        prompt=prompt,
+        reset=reset,
+        files=files,
+    )
 
-    Flow
-    ----
-    1. Resolve the Blueprint (inline or from registry).
-    2. Get/create the in-memory session (for conversation history).
-    3. Call ``prepare_turn`` to load state, compute missing fields, fetch
-       dynamic data, build the system prompt and the single tool definition.
-    4. If the form is already complete, return early.
-    5. Build the message list: [system, ...history, user].
-    6. Run the agentic tool loop (same pattern as server.py).
-    7. Return the assistant response and updated form summary.
-    """
-    # ---- 1. Resolve Blueprint ------------------------------------------------
-    blueprint: Blueprint
-    if request.blueprint is not None:
-        blueprint = request.blueprint
-        blueprint_repository.save(blueprint)
-    else:
-        assert request.blueprint_id is not None  # validated by model
-        blueprint = _get_blueprint(request.blueprint_id)
 
-    # ---- 2. Session ----------------------------------------------------------
-    session = get_or_create_session(request.session_id, reset=request.reset)
+async def run_dynamic_blueprint_turn(
+    *,
+    session: SessionState,
+    blueprint: Blueprint,
+    prompt: str,
+    reset: bool = False,
+    files: list[StarletteUploadFile] | None = None,
+) -> DynamicChatResponse:
+    document_payload = await build_document_payload(files or [])
+    cache_documents(session, document_payload.vision_parts, document_payload.text_blocks)
 
-    # ---- 3. Prepare turn context --------------------------------------------
-    ctx = prepare_turn(session.session_id, blueprint, reset=request.reset)
-
-    # ---- 4. Early-exit if already complete ----------------------------------
+    ctx = prepare_turn(session.session_id, blueprint, reset=reset)
     if ctx.is_complete:
         return DynamicChatResponse(
             session_id=session.session_id,
@@ -184,22 +180,42 @@ async def dynamic_chat(request: DynamicChatRequest) -> DynamicChatResponse:
             token_usage=get_token_usage(session),
         )
 
-    # ---- 5. Record user message in session history --------------------------
-    user_text = request.prompt.strip() or "Hello."
-    update_session_state(session, message={"role": "user", "content": user_text})
+    if document_payload.vision_parts or document_payload.text_blocks:
+        await _extract_dynamic_document_fields(session, blueprint, document_payload)
+        ctx = prepare_turn(session.session_id, blueprint)
+        if ctx.is_complete:
+            return DynamicChatResponse(
+                session_id=session.session_id,
+                blueprint_id=blueprint.blueprint_id,
+                response=_build_user_visible_response(blueprint, ctx, blueprint.completion_message),
+                model=OLLAMA_MODEL,
+                completed=True,
+                missing_fields=[],
+                filled_fields=ctx.filled_fields,
+                submission_path=str(ctx.submission_path),
+                token_usage=get_token_usage(session),
+            )
 
-    # ---- 6. Run agentic loop ------------------------------------------------
-    response_text = await _run_dynamic_turn(
+    user_text = prompt.strip() or "Hello."
+    user_content = _build_user_content(user_text, document_payload, session)
+    update_session_state(
+        session,
+        message={"role": "user", "content": _build_session_user_summary(user_text, document_payload.filenames)},
+    )
+
+    response_text, data_was_saved = await _run_dynamic_turn(
         session=session,
         blueprint=blueprint,
-        user_text=user_text,
+        user_content=user_content,
         ctx=ctx,
     )
 
-    # Reload context after tool calls may have updated the state
     ctx = prepare_turn(session.session_id, blueprint)
-    response_text = _build_user_visible_response(blueprint, ctx, response_text)
+    if ctx.missing_fields and not data_was_saved and user_text.strip():
+        await _extract_dynamic_from_conversation(session, blueprint, user_text, response_text)
+        ctx = prepare_turn(session.session_id, blueprint)
 
+    response_text = _build_user_visible_response(blueprint, ctx, response_text)
     return DynamicChatResponse(
         session_id=session.session_id,
         blueprint_id=blueprint.blueprint_id,
@@ -223,9 +239,9 @@ _MAX_TOOL_ROUNDS = 8  # guard against infinite loops
 async def _run_dynamic_turn(
     session: SessionState,
     blueprint: Blueprint,
-    user_text: str,
+    user_content: list[dict[str, Any]],
     ctx: "Any",  # FormEngineContext — avoid circular import annotation
-) -> str:
+) -> tuple[str, bool]:
     """
     Run the LLM in a loop, executing ``update_form_state`` tool calls until
     the model produces a final text response.
@@ -237,11 +253,12 @@ async def _run_dynamic_turn(
       - If the model returns plain text, ends the loop.
     """
     # Build initial message list
-    messages = _build_messages(session, ctx, user_text)
+    messages = _build_messages(session, ctx, user_content)
 
     # Keep track of the current tool definition (may change each round
     # as fields get filled and the available set shrinks)
     current_ctx = ctx
+    data_was_saved = False
 
     for _round in range(_MAX_TOOL_ROUNDS):
         completion = await ollama_chat_completion(
@@ -273,7 +290,7 @@ async def _run_dynamic_turn(
             if not final_text:
                 raise HTTPException(status_code=502, detail="Ollama returned an empty response.")
             update_session_state(session, message={"role": "assistant", "content": final_text})
-            return final_text
+            return final_text, data_was_saved
 
         # Execute each tool call
         for tc in tool_calls:
@@ -289,6 +306,7 @@ async def _run_dynamic_turn(
 
             extracted = _parse_tool_args(tc)
             result = apply_tool_call(session.session_id, blueprint, extracted)
+            data_was_saved = data_was_saved or bool(result.get("updated_fields"))
 
             messages.append({
                 "role": "tool",
@@ -321,14 +339,14 @@ async def _run_dynamic_turn(
 def _build_messages(
     session: SessionState,
     ctx: "Any",  # FormEngineContext
-    user_text: str,
+    user_content: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Build the full message list for an Ollama call."""
     history = _build_history(session)
     return [
         {"role": "system", "content": ctx.system_prompt},
         *history,
-        {"role": "user", "content": user_text},
+        {"role": "user", "content": user_content},
     ]
 
 
@@ -445,3 +463,195 @@ def _format_filled_fields_summary(
         label = field_map[key].label if key in field_map else key
         lines.append(f"- {label}: {value}")
     return "\n".join(lines)
+
+
+async def _parse_dynamic_chat_request(
+    request: Request,
+) -> tuple[str | None, Blueprint, str, bool, list[StarletteUploadFile]]:
+    content_type = request.headers.get("content-type", "").lower()
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        session_id = _normalize_optional_string(form.get("session_id"))
+        prompt = _normalize_optional_string(form.get("prompt")) or ""
+        reset = _coerce_bool(form.get("reset"))
+        files = [
+            value
+            for _, value in form.multi_items()
+            if isinstance(value, StarletteUploadFile)
+        ]
+
+        blueprint_json = _normalize_optional_string(form.get("blueprint"))
+        if blueprint_json:
+            try:
+                blueprint = Blueprint.model_validate(json.loads(blueprint_json))
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail="Invalid blueprint payload.") from exc
+            blueprint_repository.save(blueprint)
+            return session_id, blueprint, prompt, reset, files
+
+        blueprint_id = _normalize_optional_string(form.get("blueprint_id"))
+        if not blueprint_id:
+            raise HTTPException(status_code=400, detail="blueprint_id is required for multipart chat.")
+        return session_id, _get_blueprint(blueprint_id), prompt, reset, files
+
+    try:
+        payload = DynamicChatRequest.model_validate(await request.json())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid dynamic chat payload.") from exc
+
+    if payload.blueprint is not None:
+        blueprint_repository.save(payload.blueprint)
+        return payload.session_id, payload.blueprint, payload.prompt.strip(), payload.reset, []
+
+    assert payload.blueprint_id is not None
+    return payload.session_id, _get_blueprint(payload.blueprint_id), payload.prompt.strip(), payload.reset, []
+
+
+def _build_user_content(prompt: str, document_payload: Any, session: SessionState) -> list[dict[str, Any]]:
+    content_parts: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": prompt or "No text message was provided. Use any uploaded documents if relevant.",
+        }
+    ]
+
+    for text_block in document_payload.text_blocks:
+        content_parts.append({"type": "text", "text": f"Extracted PDF text:\n{text_block}"})
+    content_parts.extend(document_payload.vision_parts)
+
+    if not (document_payload.vision_parts or document_payload.text_blocks) and session.has_received_document:
+        content_parts.append(
+            {
+                "type": "text",
+                "text": (
+                    "[SESSION DOCUMENT CACHE] Previously uploaded documents are included again "
+                    "for re-examination. Do not ask the user to resend them."
+                ),
+            }
+        )
+        for text_block in session.cached_text_blocks:
+            content_parts.append({"type": "text", "text": f"Cached document text:\n{text_block}"})
+        content_parts.extend(session.cached_vision_parts)
+
+    return content_parts
+
+
+def _build_session_user_summary(prompt: str, filenames: list[str]) -> str:
+    if not filenames:
+        return prompt
+    return f"{prompt}\nUploaded files: {', '.join(filenames)}"
+
+
+async def _extract_dynamic_document_fields(session: SessionState, blueprint: Blueprint, document_payload: Any) -> None:
+    ctx = prepare_turn(session.session_id, blueprint)
+    if not ctx.missing_fields:
+        return
+
+    fields_str = ", ".join(ctx.missing_fields)
+    content_parts: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": (
+                f"Extract the following fields from the attached document image or text: {fields_str}\n\n"
+                "Return ONLY a valid JSON object with the field keys as keys and extracted values as strings. "
+                "If a field is not visible, omit it."
+            ),
+        }
+    ]
+    for text_block in document_payload.text_blocks:
+        content_parts.append({"type": "text", "text": f"Document text:\n{text_block}"})
+    content_parts.extend(document_payload.vision_parts)
+
+    completion = await ollama_chat_completion(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You extract structured form values from documents. "
+                    "Return only a JSON object with field keys and string values."
+                ),
+            },
+            {"role": "user", "content": content_parts},
+        ],
+        temperature=0.0,
+    )
+    usage = extract_token_usage(completion)
+    record_token_usage(
+        session,
+        prompt_tokens=usage["prompt_tokens"],
+        completion_tokens=usage["completion_tokens"],
+    )
+    extracted = _parse_json_object(_extract_text(completion.get("message") or {}))
+    if extracted:
+        apply_tool_call(session.session_id, blueprint, extracted)
+
+
+async def _extract_dynamic_from_conversation(
+    session: SessionState,
+    blueprint: Blueprint,
+    user_text: str,
+    assistant_text: str,
+) -> None:
+    ctx = prepare_turn(session.session_id, blueprint)
+    if not ctx.missing_fields:
+        return
+
+    fields_str = ", ".join(ctx.missing_fields)
+    prompt = (
+        f'The user said: "{user_text}"\n'
+        f'The assistant replied: "{assistant_text}"\n\n'
+        f"Extract values for these fields if they are clearly present: {fields_str}\n\n"
+        "Return ONLY a valid JSON object keyed by field key. If nothing is extractable, return {}."
+    )
+    completion = await ollama_chat_completion(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "You extract structured form values from conversation text. "
+                    "Return only a JSON object."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.0,
+        max_tokens=256,
+    )
+    usage = extract_token_usage(completion)
+    record_token_usage(
+        session,
+        prompt_tokens=usage["prompt_tokens"],
+        completion_tokens=usage["completion_tokens"],
+    )
+    extracted = _parse_json_object(_extract_text(completion.get("message") or {}))
+    if extracted:
+        apply_tool_call(session.session_id, blueprint, extracted)
+
+
+def _parse_json_object(raw_text: str) -> dict[str, Any]:
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.removeprefix("```json").removeprefix("```").strip()
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}

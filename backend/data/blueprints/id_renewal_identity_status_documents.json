@@ -1,0 +1,49 @@
+{
+  "blueprint_id": "id_renewal_identity_status_documents",
+  "title": "Gather Identity And Status Documentation",
+  "description": "Collect the identity, Social Security, and immigration-status records needed by the state authority.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Verify which identity and immigration-status documents the user has ready for the DMV visit.",
+  "fields": [
+    {
+      "key": "current_state_id_status",
+      "label": "Current State ID Status",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Confirm whether the user has the current physical state ID card available.",
+      "enum_values": [
+        "Available",
+        "Missing"
+      ]
+    },
+    {
+      "key": "social_security_document",
+      "label": "Social Security Document",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the user will present an SSN card/record or an official denial letter.",
+      "enum_values": [
+        "Social Security Number available",
+        "Official SSN denial letter available"
+      ]
+    },
+    {
+      "key": "passport_status",
+      "label": "Passport Status",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Confirm the passport is valid and available.",
+      "enum_values": [
+        "Valid passport available",
+        "Passport missing or expired"
+      ]
+    },
+    {
+      "key": "immigration_documents_available",
+      "label": "Immigration Documents Available",
+      "field_type": "text",
+      "required": true,
+      "hint": "List the valid immigration documents the user has ready, such as US visa, most recent I-94, and active I-20 or DS-2019."
+    }
+  ],
+  "completion_message": "Identity and status documentation captured. Continue with proof of residency."
+}

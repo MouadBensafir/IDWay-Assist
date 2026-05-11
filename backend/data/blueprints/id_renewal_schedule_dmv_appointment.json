@@ -1,0 +1,37 @@
+{
+  "blueprint_id": "id_renewal_schedule_dmv_appointment",
+  "title": "Schedule DMV Appointment",
+  "description": "Schedule an in-person DMV appointment to avoid unpredictable walk-in delays.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Help the user capture the key details of the DMV appointment.",
+  "fields": [
+    {
+      "key": "state_authority_name",
+      "label": "State Authority Name",
+      "field_type": "text",
+      "required": true,
+      "hint": "This should already be known from the earlier state-authority step."
+    },
+    {
+      "key": "appointment_location",
+      "label": "Appointment Location",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the DMV office or branch where the user will renew the ID."
+    },
+    {
+      "key": "appointment_datetime",
+      "label": "Appointment Date And Time",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the scheduled in-person appointment slot."
+    },
+    {
+      "key": "appointment_confirmation_number",
+      "label": "Appointment Confirmation Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the confirmation number, booking code, or equivalent appointment reference."
+    }
+  ],
+  "completion_message": "DMV appointment scheduled. Continue with in-person processing requirements."
+}

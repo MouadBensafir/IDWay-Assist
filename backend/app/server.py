@@ -44,9 +44,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Schema-Driven State Machine router (no hardcoded domain logic) ──────────
+# ── Schema-Driven State Machine router ───────────────────────────────────────
 from .dynamic_server import dynamic_router  # noqa: E402
 app.include_router(dynamic_router)
+# ── Service Workflow orchestration router ────────────────────────────────────
+from .workflow_server import workflow_router  # noqa: E402
+app.include_router(workflow_router)
 # ────────────────────────────────────────────────────────────────────────────
 
 

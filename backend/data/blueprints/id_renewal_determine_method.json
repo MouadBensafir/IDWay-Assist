@@ -1,0 +1,45 @@
+{
+  "blueprint_id": "id_renewal_determine_method",
+  "title": "Determine Renewal Method",
+  "description": "Determine whether the applicant is eligible for online renewal or must renew in person, especially when immigration status must be re-verified.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Guide the user to determine whether they can renew online or must appear in person.",
+  "fields": [
+    {
+      "key": "state_of_residence",
+      "label": "State of Residence",
+      "field_type": "text",
+      "required": true,
+      "hint": "This value should already be known from the prior step."
+    },
+    {
+      "key": "renewal_method",
+      "label": "Renewal Method",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Choose the actual method the user must follow for this renewal.",
+      "enum_values": [
+        "Online renewal",
+        "In-person renewal"
+      ]
+    },
+    {
+      "key": "legal_presence_verification_required",
+      "label": "Legal Presence Verification Required",
+      "field_type": "enum",
+      "required": true,
+      "hint": "International students and non-immigrant visa holders commonly need in-person renewal because lawful presence must be checked again.",
+      "enum_values": [
+        "Yes",
+        "No"
+      ]
+    },
+    {
+      "key": "renewal_method_notes",
+      "label": "Renewal Method Notes",
+      "field_type": "text",
+      "required": true,
+      "hint": "Capture the reason for the required method or any relevant eligibility rule."
+    }
+  ],
+  "completion_message": "Renewal method confirmed. Continue by gathering identity, Social Security, and immigration-status documents."
+}

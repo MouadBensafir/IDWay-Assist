@@ -1,0 +1,84 @@
+{
+  "blueprint_id": "ds160_form",
+  "title": "DS-160 Online Nonimmigrant Visa Application",
+  "description": "Complete the required DS-160 Online Nonimmigrant Visa Application and record the confirmation number.",
+  "assistant_persona": "You are IDWay Assist, a US visa application specialist. Guide the applicant through collecting all details required for the DS-160 form. Extract as many fields as possible from uploaded documents before asking questions.",
+  "fields": [
+    {
+      "key": "full_name",
+      "label": "Full Name",
+      "field_type": "text",
+      "required": true,
+      "hint": "Full name exactly as it appears on the passport.",
+      "extractable_from_document": true
+    },
+    {
+      "key": "date_of_birth",
+      "label": "Date of Birth",
+      "field_type": "date",
+      "required": true,
+      "hint": "Date of birth in ISO 8601 format (YYYY-MM-DD).",
+      "extractable_from_document": true
+    },
+    {
+      "key": "passport_number",
+      "label": "Passport Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "Passport number exactly as it appears on the document.",
+      "extractable_from_document": true
+    },
+    {
+      "key": "passport_expiry",
+      "label": "Passport Expiry Date",
+      "field_type": "date",
+      "required": true,
+      "hint": "Passport expiry date in ISO 8601 format (YYYY-MM-DD).",
+      "extractable_from_document": true
+    },
+    {
+      "key": "nationality",
+      "label": "Nationality / Country of Citizenship",
+      "field_type": "text",
+      "required": true,
+      "hint": "Country of citizenship as stated on the passport.",
+      "extractable_from_document": true
+    },
+    {
+      "key": "us_contact_name",
+      "label": "US Point of Contact Name",
+      "field_type": "text",
+      "required": true,
+      "hint": "Name of the person or organization the applicant will contact in the US."
+    },
+    {
+      "key": "us_contact_address",
+      "label": "US Contact Address",
+      "field_type": "text",
+      "required": true,
+      "hint": "Full US address of the contact person or organization."
+    },
+    {
+      "key": "purpose_of_trip",
+      "label": "Purpose of Trip",
+      "field_type": "text",
+      "required": true,
+      "hint": "Briefly describe the primary purpose of the trip (tourism, conference, family visit, etc.)."
+    },
+    {
+      "key": "intended_arrival_date",
+      "label": "Intended Date of Arrival in US",
+      "field_type": "date",
+      "required": true,
+      "hint": "Planned date of arrival in the United States (YYYY-MM-DD)."
+    },
+    {
+      "key": "ds160_confirmation_number",
+      "label": "DS-160 Confirmation Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "The confirmation number issued after submitting the DS-160 form (format: AA00XXXXXXXX)."
+    }
+  ],
+  "completion_message": "DS-160 information collected. Save your confirmation number — you will need it to create your appointment profile and at the consular interview."
+}

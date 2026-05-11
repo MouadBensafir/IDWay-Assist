@@ -1,0 +1,40 @@
+{
+  "blueprint_id": "id_renewal_payment",
+  "title": "Process Payment",
+  "description": "Capture the state-mandated ID renewal fee and payment method used at the DMV.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Record the payment details for the state ID renewal.",
+  "fields": [
+    {
+      "key": "renewal_fee_amount",
+      "label": "Renewal Fee Amount",
+      "field_type": "text",
+      "required": true,
+      "hint": "Record the amount due for the state ID renewal."
+    },
+    {
+      "key": "payment_method",
+      "label": "Payment Method",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record the payment method accepted and used.",
+      "enum_values": [
+        "Debit card",
+        "Credit card",
+        "Check",
+        "Cash"
+      ]
+    },
+    {
+      "key": "payment_status",
+      "label": "Payment Status",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the renewal fee has been paid.",
+      "enum_values": [
+        "Paid",
+        "Pending"
+      ]
+    }
+  ],
+  "completion_message": "Payment details captured. Continue by confirming temporary documentation and mailing."
+}

@@ -1,0 +1,47 @@
+{
+  "blueprint_id": "visa_category_selector",
+  "title": "Visa Category Selection",
+  "description": "Identify the specific non-immigrant visa category that matches the applicant's purpose of travel.",
+  "assistant_persona": "You are IDWay Assist, a US visa guidance specialist. Help the applicant identify the correct non-immigrant visa category based on their travel purpose. Be clear and precise.",
+  "fields": [
+    {
+      "key": "full_name",
+      "label": "Full Name",
+      "field_type": "text",
+      "required": true,
+      "hint": "Applicant's full name as it appears on their passport.",
+      "extractable_from_document": true
+    },
+    {
+      "key": "nationality",
+      "label": "Nationality",
+      "field_type": "text",
+      "required": true,
+      "hint": "Applicant's country of citizenship.",
+      "extractable_from_document": true
+    },
+    {
+      "key": "travel_purpose_description",
+      "label": "Purpose of Travel",
+      "field_type": "text",
+      "required": true,
+      "hint": "Briefly describe why the applicant is traveling to the United States."
+    },
+    {
+      "key": "visa_type",
+      "label": "Visa Type",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Select the correct non-immigrant visa type based on the travel purpose.",
+      "enum_values": ["B-1 (Business)", "B-2 (Tourism/Medical)", "F-1 (Academic Student)", "J-1 (Exchange Visitor)", "H-1B (Specialty Occupation)", "L-1 (Intracompany Transfer)", "O-1 (Extraordinary Ability)", "C-1/D (Crew Member)"]
+    },
+    {
+      "key": "intended_stay_duration",
+      "label": "Intended Duration of Stay",
+      "field_type": "text",
+      "required": true,
+      "hint": "How long does the applicant plan to stay in the US? (e.g., '3 weeks', '6 months')"
+    }
+  ],
+  "completion_message": "Visa category confirmed. Proceed to complete the DS-160 Online Nonimmigrant Visa Application form."
+}

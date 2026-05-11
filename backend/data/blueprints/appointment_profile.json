@@ -1,0 +1,39 @@
+{
+  "blueprint_id": "appointment_profile",
+  "title": "Appointment Profile Creation",
+  "description": "Register an account on the region-specific US visa scheduling portal (CGI Federal or AIS) and collect the profile credentials.",
+  "assistant_persona": "You are IDWay Assist, a US visa scheduling specialist. Help the applicant create their scheduling portal account and record the required credentials.",
+  "fields": [
+    {
+      "key": "ds160_confirmation_number",
+      "label": "DS-160 Confirmation Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "The DS-160 confirmation number from the previous step (pre-filled automatically).",
+      "extractable_from_document": true
+    },
+    {
+      "key": "scheduling_portal",
+      "label": "Scheduling Portal",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Select the portal used for your country of application.",
+      "enum_values": ["CGI Federal", "AIS (Appointment Information System)"]
+    },
+    {
+      "key": "portal_email",
+      "label": "Portal Account Email",
+      "field_type": "text",
+      "required": true,
+      "hint": "Email address used to register the scheduling portal account."
+    },
+    {
+      "key": "portal_profile_id",
+      "label": "Portal Profile ID / UID",
+      "field_type": "text",
+      "required": true,
+      "hint": "The unique profile ID or applicant UID assigned by the scheduling portal after registration."
+    }
+  ],
+  "completion_message": "Appointment profile created. Proceed to complete the MRV fee payment."
+}

@@ -1,0 +1,32 @@
+{
+  "blueprint_id": "payment_verification",
+  "title": "Payment Status Verification",
+  "description": "Confirm that the MRV fee payment receipt has been activated and is recognized by the scheduling system.",
+  "assistant_persona": "You are IDWay Assist, a US visa payment verification specialist. Help the applicant confirm their payment status in the scheduling portal.",
+  "fields": [
+    {
+      "key": "payment_receipt_number",
+      "label": "Payment Receipt Number",
+      "field_type": "text",
+      "required": true,
+      "hint": "The receipt number from the MRV fee payment (pre-filled automatically).",
+      "extractable_from_document": true
+    },
+    {
+      "key": "payment_activation_status",
+      "label": "Payment Activation Status",
+      "field_type": "enum",
+      "required": true,
+      "hint": "What status does the scheduling portal show for this payment?",
+      "enum_values": ["Activated", "Pending", "Not Found"]
+    },
+    {
+      "key": "activation_confirmation_date",
+      "label": "Activation Confirmed On",
+      "field_type": "date",
+      "required": true,
+      "hint": "Date the payment was confirmed as activated in the scheduling system (YYYY-MM-DD)."
+    }
+  ],
+  "completion_message": "Payment verified and activated. You may now schedule your Biometrics (VAC) appointment."
+}

@@ -1,0 +1,43 @@
+{
+  "blueprint_id": "id_renewal_in_person_processing",
+  "title": "Complete In-Person Processing",
+  "description": "Present the original documents, complete the vision screening if applicable, and take a new photo.",
+  "assistant_persona": "You are IDWay Assist, a US state ID renewal specialist. Confirm the required in-person DMV processing steps.",
+  "fields": [
+    {
+      "key": "original_documents_presented",
+      "label": "Original Documents Presented",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the user has the original documents ready to present to the DMV clerk.",
+      "enum_values": [
+        "Yes",
+        "No"
+      ]
+    },
+    {
+      "key": "vision_screening_status",
+      "label": "Vision Screening Status",
+      "field_type": "enum",
+      "required": true,
+      "hint": "If vision screening applies, record its status. For state ID renewal without driving privileges, record if it is not required.",
+      "enum_values": [
+        "Passed",
+        "Pending",
+        "Not required"
+      ]
+    },
+    {
+      "key": "new_id_photo_status",
+      "label": "New ID Photo Status",
+      "field_type": "enum",
+      "required": true,
+      "hint": "Record whether the new ID photograph has been taken or is still pending.",
+      "enum_values": [
+        "Completed",
+        "Pending"
+      ]
+    }
+  ],
+  "completion_message": "In-person processing details captured. Continue with payment."
+}
