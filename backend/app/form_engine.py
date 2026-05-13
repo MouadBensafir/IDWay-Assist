@@ -120,6 +120,7 @@ def update_form_state(
     # Whitelist: only accept keys declared in the Blueprint
     allowed_keys = set(field_map.keys())
     applied: list[str] = []
+    validation_errors: dict[str, str] = {}
 
     for raw_key, value in extracted_data.items():
         canonical = _resolve_key(raw_key, allowed_keys)
@@ -129,6 +130,16 @@ def update_form_state(
         cleaned = _clean_value(value)
         if cleaned is None:
             continue  # empty / None – skip
+
+        # Regex validation — reject values that don't match
+        field = field_map[canonical]
+        if field.validation_regex is not None:
+            string_value = str(cleaned)
+            if not re.match(field.validation_regex, string_value):
+                validation_errors[canonical] = (
+                    f"must match pattern {field.validation_regex}"
+                )
+                continue
 
         old_value = state.get(canonical)
         merged = _deep_merge(old_value, cleaned)
@@ -146,6 +157,7 @@ def update_form_state(
         "updated_fields": applied,
         "missing_fields": missing,
         "filled_fields": filled,
+        "validation_errors": validation_errors,
         "is_complete": len(missing) == 0,
     }
 

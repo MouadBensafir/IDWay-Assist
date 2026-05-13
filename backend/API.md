@@ -1,12 +1,8 @@
 # API Usage
 
-This backend exposes two chat flows:
+This backend exposes a single workflow-driven chat API.
 
-- `POST /chat`: the main assistant flow used by the current app
-- `POST /dynamic/chat`: the schema-driven blueprint flow
-
-Default local base URL:
-
+Base URL:
 ```text
 http://127.0.0.1:8001
 ```
@@ -17,272 +13,200 @@ http://127.0.0.1:8001
 curl.exe http://127.0.0.1:8001/health
 ```
 
-Returns basic server status, model name, active session count, and available services.
+Returns server status, model name, and active session count.
 
-## 2. Main Chat API
+## 2. Workflow Chat
 
-Endpoint:
+### Auto-detect workflow
 
 ```text
-POST /chat
+POST /workflows/chat
 ```
 
-Purpose:
-
-- starts or continues a service conversation
-- selects a service automatically from the user prompt
-- saves collected form data into `backend/submissions/`
-- supports plain text or multipart file upload
-
-### JSON request
-
-```json
-{
-  "session_id": "optional-existing-session-id",
-  "prompt": "I need a visa appointment",
-  "reset": false
-}
-```
-
-### JSON example
+The backend infers the workflow from keyword matching in the prompt. If ambiguous or no match, it returns a list of available services.
 
 ```bash
-curl.exe -X POST http://127.0.0.1:8001/chat ^
+curl.exe -X POST http://127.0.0.1:8001/workflows/chat ^
   -H "Content-Type: application/json" ^
   -d "{\"prompt\":\"I need a visa appointment\"}"
 ```
 
-### Multipart example
+### Explicit workflow
+
+```text
+POST /workflows/{workflow_id}/chat
+```
 
 ```bash
-curl.exe -X POST http://127.0.0.1:8001/chat ^
-  -F "prompt=I need a visa appointment" ^
-  -F "file=@C:\\path\\to\\passport.jpg"
+curl.exe -X POST http://127.0.0.1:8001/workflows/us_nonimmigrant_visa/chat ^
+  -H "Content-Type: application/json" ^
+  -d "{\"prompt\":\"I need a visa appointment\"}"
+```
+
+### Multipart with file upload
+
+```bash
+curl.exe -X POST http://127.0.0.1:8001/workflows/us_nonimmigrant_visa/chat ^
+  -F "prompt=Here is my passport" ^
+  -F "file=@C:\path\to\passport.jpg"
 ```
 
 ### Response shape
 
 ```json
 {
-  "session_id": "7df954188b704f0a9988c5cf2e9b3c64",
+  "workflow_session_id": "abc123",
+  "workflow_id": "us_nonimmigrant_visa",
+  "workflow_title": "US Non-Immigrant Visa Appointment",
   "response": "Assistant reply text",
   "model": "qwen3.5",
-  "service_name": "VISA Appointment",
-  "submission_path": "C:\\...\\backend\\submissions\\7df954188b704f0a9988c5cf2e9b3c64_visa_appointment.json",
-  "completed": false,
-  "missing_fields": [
-    "appointment_city",
-    "appointment_center"
-  ],
-  "token_usage": {
-    "prompt_tokens": 100,
-    "completion_tokens": 40,
-    "total_tokens": 140
-  }
+  "workflow_complete": false,
+  "current_step_id": "determine_visa_category",
+  "current_step_title": "1. Determine Visa Category",
+  "current_step_status": "in_progress",
+  "missing_fields": ["full_name", "visa_type"],
+  "filled_fields": {},
+  "submission_path": "C:\\...\\submissions\\abc123__visa_category_selector.json",
+  "token_usage": { "prompt_tokens": 100, "completion_tokens": 40, "total_tokens": 140 }
 }
 ```
 
 ### Notes
 
-- Reuse `session_id` to continue a conversation.
+- Reuse `workflow_session_id` to continue a conversation.
 - Set `reset: true` to restart an existing session.
 - Uploaded documents are cached in memory for the current session.
-- Completed submissions are stored as JSON files in `backend/submissions/`.
+- Completed submissions stored as JSON files in `backend/submissions/`.
 
-## 3. Delete a Main Chat Session
-
-Endpoint:
+## 3. Delete a Session
 
 ```text
 DELETE /sessions/{session_id}
 ```
 
-Example:
+```bash
+curl.exe -X DELETE http://127.0.0.1:8001/sessions/abc123
+```
+
+## 4. Workflow Management
+
+### Register a Workflow
+
+```text
+POST /workflows
+```
 
 ```bash
-curl.exe -X DELETE http://127.0.0.1:8001/sessions/7df954188b704f0a9988c5cf2e9b3c64
+curl.exe -X POST http://127.0.0.1:8001/workflows ^
+  -H "Content-Type: application/json" ^
+  --data-binary "@backend/data/workflows/us_nonimmigrant_visa.json"
 ```
 
 Response:
-
 ```json
-{
-  "session_id": "7df954188b704f0a9988c5cf2e9b3c64",
-  "deleted": true
-}
+{ "workflow_id": "us_nonimmigrant_visa", "step_count": 5, "registered": true }
 ```
 
-## 4. Dynamic Blueprint API
+### List Workflows
 
-These endpoints support the schema-driven form engine.
+```bash
+curl.exe http://127.0.0.1:8001/workflows
+```
 
-## 4.1 Register a Blueprint
+### Workflow Catalog
 
-Endpoint:
+```bash
+curl.exe http://127.0.0.1:8001/workflows/catalog
+```
+
+### Get a Workflow
+
+```bash
+curl.exe http://127.0.0.1:8001/workflows/us_nonimmigrant_visa
+```
+
+### Delete a Workflow
+
+```bash
+curl.exe -X DELETE http://127.0.0.1:8001/workflows/us_nonimmigrant_visa
+```
+
+## 5. Workflow Sessions
+
+### Start or Resume a Session
 
 ```text
-POST /dynamic/blueprints
+POST /workflows/{workflow_id}/sessions
 ```
-
-Example:
-
-```bash
-curl.exe -X POST http://127.0.0.1:8001/dynamic/blueprints ^
-  -H "Content-Type: application/json" ^
-  --data-binary "@backend/data/blueprints/visa_appointment.json"
-```
-
-The actual request body must be wrapped like this:
 
 ```json
-{
-  "blueprint": {
-    "blueprint_id": "visa_appointment",
-    "title": "VISA Appointment",
-    "fields": []
-  }
-}
+{ "workflow_session_id": "optional-existing-session-id" }
 ```
 
-Response:
-
-```json
-{
-  "blueprint_id": "visa_appointment",
-  "field_count": 9,
-  "registered": true
-}
-```
-
-## 4.2 List Registered Blueprints
-
-```bash
-curl.exe http://127.0.0.1:8001/dynamic/blueprints
-```
-
-## 4.3 Get a Blueprint
-
-```bash
-curl.exe http://127.0.0.1:8001/dynamic/blueprints/visa_appointment
-```
-
-## 4.4 Delete a Blueprint
-
-```bash
-curl.exe -X DELETE http://127.0.0.1:8001/dynamic/blueprints/visa_appointment
-```
-
-## 4.5 Dynamic Chat
-
-Endpoint:
+### Get Session Detail
 
 ```text
-POST /dynamic/chat
+GET /workflows/{workflow_id}/sessions/{session_id}
 ```
 
-You must provide either:
-
-- `blueprint_id`
-- or a full inline `blueprint`
-
-### Request using `blueprint_id`
-
-```json
-{
-  "session_id": "optional-session-id",
-  "blueprint_id": "visa_appointment",
-  "prompt": "I need a visa appointment",
-  "reset": false
-}
-```
-
-### Example
-
-```bash
-curl.exe -X POST http://127.0.0.1:8001/dynamic/chat ^
-  -H "Content-Type: application/json" ^
-  -d "{\"blueprint_id\":\"visa_appointment\",\"prompt\":\"I need a visa appointment\"}"
-```
-
-### Response shape
-
-```json
-{
-  "session_id": "abc123",
-  "blueprint_id": "visa_appointment",
-  "response": "Assistant reply text",
-  "model": "qwen3.5",
-  "completed": false,
-  "missing_fields": [
-    "appointment_city",
-    "appointment_center"
-  ],
-  "filled_fields": {
-    "full_name": "MOUAD BENSAFIR"
-  },
-  "submission_path": "C:\\...\\backend\\submissions\\abc123__visa_appointment.json",
-  "token_usage": {
-    "prompt_tokens": 100,
-    "completion_tokens": 40,
-    "total_tokens": 140
-  }
-}
-```
-
-## 4.6 Get Dynamic Session State
-
-Endpoint:
+### Delete a Workflow Session
 
 ```text
-GET /dynamic/sessions/{session_id}/state?blueprint_id={blueprint_id}
+DELETE /workflows/{workflow_id}/sessions/{session_id}
 ```
 
-Example:
+### Delete by Session ID (without workflow_id)
 
-```bash
-curl.exe "http://127.0.0.1:8001/dynamic/sessions/abc123/state?blueprint_id=visa_appointment"
+```text
+DELETE /workflows/sessions/{session_id}
 ```
 
-Returns the raw saved submission JSON for that dynamic session.
+### Advance a Step
 
-## 4.7 Delete a Dynamic Session
-
-```bash
-curl.exe -X DELETE http://127.0.0.1:8001/dynamic/sessions/abc123
+```text
+POST /workflows/{workflow_id}/sessions/{session_id}/advance
 ```
 
-## 5. Data Files Used by the Dynamic Flow
+```json
+{ "step_id": "determine_visa_category", "filled_fields": { ... } }
+```
 
-The current blueprint-based visa flow reads options from:
+### Skip an Optional Step
 
-- [data/cities.json](/c:/Users/Mouad/Desktop/Expo_Test/backend/data/cities.json)
-- [data/centers.json](/c:/Users/Mouad/Desktop/Expo_Test/backend/data/centers.json)
-- [data/timeslots.json](/c:/Users/Mouad/Desktop/Expo_Test/backend/data/timeslots.json)
+```text
+POST /workflows/{workflow_id}/sessions/{session_id}/skip
+```
 
-The current visa blueprint is:
+```json
+{ "step_id": "some_optional_step" }
+```
 
-- [data/blueprints/visa_appointment.json](/c:/Users/Mouad/Desktop/Expo_Test/backend/data/blueprints/visa_appointment.json)
+### Get Step Chat Context
 
-## 6. Current Storage Behavior
+```text
+GET /workflows/{workflow_id}/sessions/{session_id}/step/{step_id}/chat_context
+```
 
-At the moment, persistence is file-based, but the backend now treats JSON as a storage adapter behind repository-style components.
+### Bind Chat Session to a Step
 
-Current repository-backed simulation:
+```text
+POST /workflows/{workflow_id}/sessions/{session_id}/step/{step_id}/bind_chat
+```
 
-- `app/repositories.py`
-  - `JsonBlueprintRepository`
-  - `JsonSubmissionRepository`
-  - `JsonReferenceDataRepository`
-  - `InMemorySessionRepository`
+```json
+{ "chat_session_id": "abc123" }
+```
 
-- service blueprints live under `backend/data/blueprints/`
-- service templates live under `backend/templates/`
-- submission outputs live under `backend/submissions/`
-- conversation sessions are kept in memory until deleted or process restart
+## 6. Data Files
 
-If the process restarts:
+Workflow definitions live in `backend/data/workflows/`.
 
-- submission JSON files remain on disk
-- in-memory session history is lost
+Blueprint definitions live in `backend/data/blueprints/`.
 
-This means you can keep the current JSON files for development and UI work, then later replace the repository implementations with a database-backed version without changing the public API.
+Submission outputs are stored in `backend/submissions/`.
+
+## 7. Storage
+
+- Session state is file-backed (`backend/submissions/`) and survives restarts.
+- Conversation history is in-memory and lost on restart.
+- Repository pattern (`app/repositories.py`) allows swapping to a database later.

@@ -17,18 +17,6 @@ DEFAULT_CONFIG = {
         "port": 8001,
     },
     "chat": {
-        "systemPrompt": (
-            "You are IDWay Assist, a helpful service assistant for a company offering identity and appointment services. "
-            "Guide the user through the correct service, explain the process when asked, and use the provided tools to inspect and update the submission database. "
-            "Be conversational, concise, and practical. Never invent field values or claim a database update happened unless a tool confirmed it."
-        ),
-        "assistantStylePrompt": (
-            "Use tools whenever you need service details or want to read or update the submission state. "
-            "Ask one focused follow-up question at a time when information is missing. "
-            "If uploaded documents contain useful details, update the submission quietly and then continue naturally. "
-            "When a service is complete, summarize the collected data clearly and confirm the session is complete."
-        ),
-        "maxToolRounds": 6,
         "recentMessageCount": 10,
     },
     "ollama": {
@@ -61,29 +49,6 @@ CONFIG = load_config()
 CHAT_CONFIG = CONFIG.get("chat", {})
 OLLAMA_CONFIG = CONFIG.get("ollama", {})
 
-SYSTEM_PROMPT = str(
-    CHAT_CONFIG.get(
-        "systemPrompt",
-        DEFAULT_CONFIG["chat"]["systemPrompt"],
-    )
-)
-ASSISTANT_STYLE_PROMPT = str(
-    CHAT_CONFIG.get(
-        "assistantStylePrompt",
-        DEFAULT_CONFIG["chat"]["assistantStylePrompt"],
-    )
-)
-MAX_TOOL_ROUNDS = int(
-    os.getenv(
-        "CHAT_MAX_TOOL_ROUNDS",
-        str(
-            CHAT_CONFIG.get(
-                "maxToolRounds",
-                DEFAULT_CONFIG["chat"]["maxToolRounds"],
-            )
-        ),
-    )
-)
 RECENT_MESSAGE_COUNT = int(
     os.getenv(
         "CHAT_RECENT_MESSAGE_COUNT",

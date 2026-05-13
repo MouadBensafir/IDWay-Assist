@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  FlatList,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -24,18 +27,17 @@ import {
 } from "expo-speech-recognition";
 import appConfig from "../config.json";
 
-const DEFAULT_LOCALE = "en-US";
-const UNSUPPORTED_PLATFORM = Platform.OS === "web";
 const API_URL = getBackendUrl();
 const WORKFLOW_ID = getWorkflowId();
 
 type Status =
-  | "checking"
-  | "ready"
-  | "listening"
-  | "processing"
-  | "speaking"
-  | "error";
+  | "setup" | "idle" | "listening" | "processing" | "speaking" | "error";
+
+type Message = {
+  role: "user" | "assistant";
+  text: string;
+  files?: Attachment[];
+};
 
 type Attachment = {
   uri: string;
@@ -50,679 +52,611 @@ type TokenUsage = {
 };
 
 const EMPTY_TOKEN_USAGE: TokenUsage = {
-  prompt_tokens: 0,
-  completion_tokens: 0,
-  total_tokens: 0,
+  prompt_tokens: 0, completion_tokens: 0, total_tokens: 0,
 };
 
-export default function MiniTalkie() {
-  const [status, setStatus] = useState<Status>(
-    UNSUPPORTED_PLATFORM ? "error" : "checking"
-  );
-  const [transcript, setTranscript] = useState("");
-  const [assistantReply, setAssistantReply] = useState("");
-  const [partialTranscript, setPartialTranscript] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
-  const [selectedLanguage, setSelectedLanguage] = useState(DEFAULT_LOCALE);
-  const [selectedVoiceId, setSelectedVoiceId] = useState("");
-  const [activeSelector, setActiveSelector] = useState<"language" | "voice" | null>(
-    null
-  );
+const COLORS = {
+  dark: {
+    bg: "#080f1e", surface: "#0e1a30", surface2: "#14243f",
+    border: "#1e3358", borderHi: "#2a4a7a",
+    ink: "#e8eef8", inkDim: "#7a9bc4", inkFaint: "#334d6e",
+    userBg: "#192c70", userInk: "#c8d8f5",
+    botBg: "#0e1a30", botBorder: "#1e3358",
+    red: "#d0142c", redDim: "#a80f22",
+    navy: "#192c70", navyMid: "#243d99", navyLight: "#2e4eb5",
+  },
+  light: {
+    bg: "#f0f4fb", surface: "#ffffff", surface2: "#e8eef8",
+    border: "#c5d4ea", borderHi: "#a0bcdf",
+    ink: "#0c1e3c", inkDim: "#3d5c8a", inkFaint: "#b0c4de",
+    userBg: "#192c70", userInk: "#d8e8ff",
+    botBg: "#ffffff", botBorder: "#c5d4ea",
+    red: "#d0142c", redDim: "#a80f22",
+    navy: "#192c70", navyMid: "#243d99", navyLight: "#2e4eb5",
+  },
+};
+
+export default function ChatScreen() {
+  const [colorScheme, setColorScheme] = useState<"dark" | "light">("dark");
+  const [status, setStatus] = useState<Status>("setup");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState("");
+  const [workflowId, setWorkflowIdState] = useState("");
+  const [workflowTitle, setWorkflowTitle] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [uploadBusy, setUploadBusy] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(EMPTY_TOKEN_USAGE);
+  const [error, setError] = useState("");
+  const [infoExpanded, setInfoExpanded] = useState(false);
 
-  const finalTranscriptRef = useRef("");
-  const shouldSpeakOnEndRef = useRef(false);
+  // Voice selector
+  const [availableVoices, setAvailableVoices] = useState<Voice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null);
+  const [showVoicePicker, setShowVoicePicker] = useState(false);
+
+  const flatListRef = useRef<FlatList>(null);
   const sessionIdRef = useRef("");
+  const transcriptRef = useRef("");
+  const statusRef = useRef<Status>("setup");
+  const abortRef = useRef(false);
 
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
+  const c = COLORS[colorScheme];
 
-  useSpeechRecognitionEvent("start", () => {
-    setErrorMessage("");
-    setStatus("listening");
-  });
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { statusRef.current = status; }, [status]);
 
-  useSpeechRecognitionEvent("result", (event: ExpoSpeechRecognitionResultEvent) => {
-    const nextTranscript = event.results[0]?.transcript?.trim() ?? "";
-
-    if (!nextTranscript) {
-      return;
-    }
-
-    setPartialTranscript(nextTranscript);
-
-    if (event.isFinal) {
-      finalTranscriptRef.current = nextTranscript;
-      setTranscript(nextTranscript);
-    }
-  });
-
-  useSpeechRecognitionEvent("error", (event: ExpoSpeechRecognitionErrorEvent) => {
-    shouldSpeakOnEndRef.current = false;
-    setStatus("error");
-    setErrorMessage(formatRecognitionError(event));
+  // ── STT events ──
+  useSpeechRecognitionEvent("result", (e: ExpoSpeechRecognitionResultEvent) => {
+    const t = e.results[0]?.transcript?.trim();
+    if (!t) return;
+    transcriptRef.current = t;
   });
 
   useSpeechRecognitionEvent("end", () => {
-    void handleRecognitionEnded();
+    if (statusRef.current !== "listening") return;
+    const t = transcriptRef.current;
+    if (!t) { restartListening(); return; }
+    handleUserTranscript(t);
   });
 
+  useSpeechRecognitionEvent("error", (e: ExpoSpeechRecognitionErrorEvent) => {
+    setStatus("idle");
+    setError(e.message || "Speech recognition error.");
+    setTimeout(restartListening, 2000);
+  });
+
+  // ── Initialize on mount ──
   useEffect(() => {
-    if (UNSUPPORTED_PLATFORM) {
-      setErrorMessage(
-        "This app uses native speech APIs and needs an Android or iOS development build."
-      );
-      return;
-    }
-
-    void prepareRecognizer();
-    void prepareVoices();
-
+    (async () => {
+      const voices = await Speech.getAvailableVoicesAsync();
+      setAvailableVoices(voices);
+      if (voices.length > 0) setSelectedVoice(voices[0]);
+    })();
     return () => {
-      void deleteConversationSession(sessionIdRef.current);
-      Speech.stop().catch(() => undefined);
+      abortRef.current = true;
+      Speech.stop().catch(() => {});
       ExpoSpeechRecognitionModule.abort();
     };
   }, []);
 
-  const voicesForLanguage = availableVoices.filter(
-    (voice) => voice.language === selectedLanguage
-  );
-  const languageOptions = getLanguageOptions(availableVoices);
-  const selectedVoice =
-    voicesForLanguage.find((voice) => voice.identifier === selectedVoiceId) ?? null;
+  // ── Helpers ──
+  const scrollToEnd = useCallback(() => {
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  }, []);
 
-  const prepareRecognizer = async () => {
+  const startSTT = async () => {
     try {
-      const permissions =
-        await ExpoSpeechRecognitionModule.getPermissionsAsync();
-
-      if (!permissions.granted && !permissions.canAskAgain) {
-        setStatus("error");
-        setErrorMessage(
-          "Microphone or speech permissions are blocked. Re-enable them in the device settings."
-        );
-        return;
-      }
-
-      const isAvailable = ExpoSpeechRecognitionModule.isRecognitionAvailable();
-      if (!isAvailable) {
-        setStatus("error");
-        setErrorMessage(getUnavailableMessage());
-        return;
-      }
-
-      setStatus("ready");
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(
-        getErrorMessage(error, "Unable to initialize the speech recognizer.")
-      );
-    }
-  };
-
-  const prepareVoices = async () => {
-    try {
-      const voices = sortVoices(await Speech.getAvailableVoicesAsync());
-      setAvailableVoices(voices);
-
-      if (voices.length === 0) {
-        setSelectedLanguage(DEFAULT_LOCALE);
-        setSelectedVoiceId("");
-        return;
-      }
-
-      const nextLanguage = pickInitialLanguage(voices, DEFAULT_LOCALE);
-      const nextVoice = pickVoiceForLanguage(voices, nextLanguage);
-
-      setSelectedLanguage(nextLanguage);
-      setSelectedVoiceId(nextVoice?.identifier ?? "");
-    } catch {
-      setAvailableVoices([]);
-      setSelectedVoiceId("");
-    }
-  };
-
-  const handleRecognitionEnded = async () => {
-    if (!shouldSpeakOnEndRef.current) {
-      if (status !== "error") {
-        setStatus("ready");
-      }
-      return;
-    }
-
-    shouldSpeakOnEndRef.current = false;
-    setStatus("processing");
-    await fetchAssistantReply();
-  };
-
-  const fetchAssistantReply = async () => {
-    const spokenText = finalTranscriptRef.current.trim();
-
-    if (!spokenText) {
-      setStatus("ready");
-      setPartialTranscript("");
-      setErrorMessage("No speech was captured. Tap and try again.");
-      return;
-    }
-
-    try {
-      const { assistantReply: assistantText, sessionId: nextSessionId, tokenUsage: nextTokenUsage } =
-        await requestAssistantReply(spokenText, sessionId, attachments);
-      if (nextSessionId) {
-        setSessionId(nextSessionId);
-      }
-      setTokenUsage(nextTokenUsage);
-      setAttachments([]);
-      setAssistantReply(assistantText);
-      setStatus("speaking");
-      await Speech.stop();
-
-      Speech.speak(assistantText, {
-        language: selectedLanguage,
-        voice: selectedVoiceId || undefined,
-        onDone: () => setStatus("ready"),
-        onStopped: () => setStatus("ready"),
-        onError: () => {
-          setStatus("error");
-          setErrorMessage("The device voice could not play back the assistant response.");
-        },
-      });
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(
-        getErrorMessage(error, "The app could not get a response from the assistant.")
-      );
-    }
-  };
-
-  const handleListenPress = async () => {
-    try {
-      setStatus("checking");
-      setErrorMessage("");
-      setTranscript("");
-      setAssistantReply("");
-      setPartialTranscript("");
-      finalTranscriptRef.current = "";
-      shouldSpeakOnEndRef.current = false;
-
-      await Speech.stop();
-
-      const permissions =
-        await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-
-      if (!permissions.granted) {
-        setStatus("error");
-        setErrorMessage("Microphone permission was denied.");
-        return;
-      }
-
-      if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
-        setStatus("error");
-        setErrorMessage(getUnavailableMessage());
-        return;
-      }
-
-      shouldSpeakOnEndRef.current = true;
-
+      const perms = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!perms.granted) { setError("Microphone permission denied."); return; }
+      transcriptRef.current = "";
       ExpoSpeechRecognitionModule.start({
-        lang: selectedLanguage,
-        interimResults: true,
+        lang: "en-US",
+        interimResults: false,
         continuous: false,
         maxAlternatives: 1,
-        androidIntentOptions: {
-          EXTRA_LANGUAGE_MODEL: "free_form",
-        },
       });
-    } catch (error) {
-      shouldSpeakOnEndRef.current = false;
-      setStatus("error");
-      setErrorMessage(
-        getErrorMessage(error, "Unable to start listening.")
-      );
+      setStatus("listening");
+    } catch {
+      setError("Cannot start speech recognition.");
+      setStatus("idle");
     }
   };
 
-  const handleMainButtonPress = async () => {
-    if (status === "speaking") {
-      try {
-        await Speech.stop();
-        setStatus("ready");
-      } catch (error) {
-        setStatus("error");
-        setErrorMessage(
-          getErrorMessage(error, "Unable to stop speaking.")
-        );
+  const restartListening = () => {
+    if (abortRef.current) return;
+    if (statusRef.current === "speaking") return;
+    if (statusRef.current === "processing") return;
+    startSTT();
+  };
+
+  const stopSTT = () => {
+    try { ExpoSpeechRecognitionModule.abort(); } catch {}
+  };
+
+  const handleUserTranscript = (text: string) => {
+    stopSTT();
+    setStatus("processing");
+    const userMsg: Message = { role: "user", text };
+    setMessages((prev) => [...prev, userMsg]);
+    scrollToEnd();
+    sendToAPI(text, []);
+  };
+
+  const sendToAPI = async (text: string, files: Attachment[]) => {
+    const fd = new FormData();
+    fd.append("prompt", text);
+    if (sessionIdRef.current) fd.append("workflow_session_id", sessionIdRef.current);
+    for (const a of files) {
+      fd.append("file", { uri: a.uri, name: a.name, type: a.type } as never);
+    }
+
+    let responseText = "";
+
+    try {
+      const res = await fetch(`${API_URL}/workflows/chat/stream`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) throw new Error(`Backend error: ${res.status}`);
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let currentEvent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (currentEvent === "token") {
+                responseText += data.token || "";
+              } else if (currentEvent === "done") {
+                const nextSessionId = (data.workflow_session_id || "").trim();
+                const nextWorkflowId = (data.workflow_id || "").trim();
+                const nextTitle = (data.workflow_title || "").trim();
+                if (nextSessionId) setSessionId(nextSessionId);
+                if (nextWorkflowId) setWorkflowIdState(nextWorkflowId);
+                if (nextTitle) setWorkflowTitle(nextTitle);
+                if (data.token_usage) setTokenUsage(normalizeTokenUsage(data.token_usage));
+
+                if (responseText.trim()) {
+                  setMessages((prev) => [...prev, { role: "assistant", text: responseText.trim() }]);
+                  scrollToEnd();
+                  setStatus("speaking");
+                  await Speech.stop();
+                  Speech.speak(responseText.trim(), {
+                    voice: selectedVoice?.identifier || undefined,
+                    onDone: () => {
+                      if (!abortRef.current) startSTT();
+                    },
+                    onStopped: () => {
+                      if (!abortRef.current) startSTT();
+                    },
+                    onError: () => {
+                      setError("TTS playback failed.");
+                      if (!abortRef.current) startSTT();
+                    },
+                  });
+                } else {
+                  if (!abortRef.current) startSTT();
+                }
+              } else if (currentEvent === "error") {
+                throw new Error(data.detail || "Backend streaming error.");
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message.startsWith("Backend")) throw parseErr;
+            }
+            currentEvent = "";
+          }
+        }
       }
-      return;
-    }
 
-    await handleListenPress();
+      if (responseText.trim()) {
+        setMessages((prev) => [...prev, { role: "assistant", text: responseText.trim() }]);
+        scrollToEnd();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Request failed.");
+      setStatus("idle");
+      setTimeout(restartListening, 3000);
+    }
   };
 
-  const handleResetConversation = async () => {
-    await deleteConversationSession(sessionId);
+  // ── Text send ──
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text && !attachments.length) return;
+    const outText = text || "Please process the attached file(s).";
+    const outFiles = [...attachments];
+    setMessages((prev) => [...prev, { role: "user", text: outText, files: outFiles }]);
+    setInput("");
+    setAttachments([]);
+    setError("");
+    setStatus("processing");
+    scrollToEnd();
+    stopSTT();
+    await sendToAPI(outText, outFiles);
+  };
+
+  const handleReset = async () => {
+    abortRef.current = true;
+    await Speech.stop().catch(() => {});
+    ExpoSpeechRecognitionModule.abort();
+    if (sessionId) {
+      try {
+        await fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+      } catch {}
+    }
     setSessionId("");
-    setTranscript("");
-    setAssistantReply("");
-    setPartialTranscript("");
+    setWorkflowIdState("");
+    setWorkflowTitle("");
+    setMessages([]);
     setAttachments([]);
     setTokenUsage(EMPTY_TOKEN_USAGE);
-    finalTranscriptRef.current = "";
-    shouldSpeakOnEndRef.current = false;
-
-    if (status !== "checking") {
-      setStatus(UNSUPPORTED_PLATFORM ? "error" : "ready");
-    }
-  };
-
-  const handleLanguageSelect = (language: string) => {
-    setSelectedLanguage(language);
-    setSelectedVoiceId(pickVoiceForLanguage(availableVoices, language)?.identifier ?? "");
-    setActiveSelector(null);
-  };
-
-  const handleVoiceSelect = (voiceId: string) => {
-    setSelectedVoiceId(voiceId);
-    setActiveSelector(null);
+    setError("");
+    abortRef.current = false;
+    setStatus("idle");
+    startSTT();
   };
 
   const handleTakePhoto = async () => {
     try {
-      setErrorMessage("");
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setStatus("error");
-        setErrorMessage("Camera permission was denied.");
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: "images",
-        quality: 1,
-      });
-
-      if (result.canceled || !result.assets[0]) {
-        return;
-      }
-
-      const compressed = await compressImage(result.assets[0].uri);
-      setAttachments((current) => [
-        ...current,
-        {
-          uri: compressed.uri,
-          name: `camera-${Date.now()}.jpg`,
-          type: "image/jpeg",
-        },
-      ]);
-      setStatus("ready");
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(getErrorMessage(error, "Unable to capture a photo."));
-    }
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 1 });
+      if (result.canceled || !result.assets[0]) return;
+      const compressed = await ImageManipulator.manipulateAsync(result.assets[0].uri, [], { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG });
+      setAttachments((prev) => [...prev, { uri: compressed.uri, name: `camera-${Date.now()}.jpg`, type: "image/jpeg" }]);
+    } catch { setError("Unable to capture a photo."); }
   };
 
   const handlePickFiles = async () => {
     try {
-      setErrorMessage("");
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["image/*", "application/pdf"],
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) {
-        return;
-      }
-
-      const nextAttachments = await Promise.all(
-        result.assets.map(async (asset) => {
-          const mimeType = asset.mimeType || guessMimeType(asset.name);
-          if (mimeType.startsWith("image/")) {
-            const compressed = await compressImage(asset.uri);
-            return {
-              uri: compressed.uri,
-              name: asset.name || `image-${Date.now()}.jpg`,
-              type: "image/jpeg",
-            };
-          }
-
-          return {
-            uri: asset.uri,
-            name: asset.name || `document-${Date.now()}.pdf`,
-            type: mimeType,
-          };
-        })
-      );
-
-      setAttachments((current) => [...current, ...nextAttachments]);
-      setStatus("ready");
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(getErrorMessage(error, "Unable to pick a file."));
-    }
+      const result = await DocumentPicker.getDocumentAsync({ type: ["image/*", "application/pdf"], multiple: true, copyToCacheDirectory: true });
+      if (result.canceled) return;
+      const next = await Promise.all(result.assets.map(async (asset) => {
+        const mime = asset.mimeType || guessMimeType(asset.name);
+        if (mime.startsWith("image/")) {
+          const compressed = await ImageManipulator.manipulateAsync(asset.uri, [], { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG });
+          return { uri: compressed.uri, name: asset.name || `image-${Date.now()}.jpg`, type: "image/jpeg" };
+        }
+        return { uri: asset.uri, name: asset.name || `document-${Date.now()}.pdf`, type: mime };
+      }));
+      setAttachments((prev) => [...prev, ...next]);
+    } catch { setError("Unable to pick a file."); }
   };
 
-  const handleSendAttachments = async () => {
-    if (!attachments.length || uploadBusy) {
-      return;
-    }
+  const toggleTheme = () => setColorScheme((p) => p === "dark" ? "light" : "dark");
 
-    try {
-      setUploadBusy(true);
-      setStatus("processing");
-      setErrorMessage("");
-
-      const { assistantReply: assistantText, sessionId: nextSessionId, tokenUsage: nextTokenUsage } =
-        await requestAssistantReply(
-          "Please use the attached files to help with my current service request.",
-          sessionId,
-          attachments
-        );
-
-      if (nextSessionId) {
-        setSessionId(nextSessionId);
-      }
-      setTokenUsage(nextTokenUsage);
-
-      setAttachments([]);
-      setAssistantReply(assistantText);
-      setStatus("speaking");
-      await Speech.stop();
-
-      Speech.speak(assistantText, {
-        language: selectedLanguage,
-        voice: selectedVoiceId || undefined,
-        onDone: () => setStatus("ready"),
-        onStopped: () => setStatus("ready"),
-        onError: () => {
-          setStatus("error");
-          setErrorMessage("The device voice could not play back the assistant response.");
-        },
-      });
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(getErrorMessage(error, "The app could not upload the file."));
-    } finally {
-      setUploadBusy(false);
-    }
+  const startConversation = () => {
+    setStatus("idle");
+    startSTT();
   };
 
-  const handleRemoveAttachment = (index: number) => {
-    setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  };
+  // ── Setup screen ──
+  if (status === "setup") {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: c.bg }]}>
+        <View style={styles.setupContainer}>
+          <Text style={[styles.setupTitle, { color: c.ink }]}>Welcome to IDWay</Text>
+          <Text style={[styles.setupSub, { color: c.inkDim }]}>
+            Select your preferred voice, then start the conversation.
+          </Text>
 
-  const liveText = partialTranscript || transcript;
-  const buttonDisabled =
-    UNSUPPORTED_PLATFORM ||
-    status === "checking" ||
-    status === "listening";
-  const displayReply = assistantReply.trim().length > 0;
-  const panelLabel = displayReply ? "Assistant Replied" : "You Said";
-  const panelText = displayReply
-    ? assistantReply
-    : liveText || "Your prompt will appear here while the app listens.";
-  const voiceSelectorDisabled = voicesForLanguage.length === 0;
-  const languageLabel = formatLanguageLabel(selectedLanguage);
-  const voiceLabel = selectedVoice
-    ? `${selectedVoice.name} (${selectedVoice.quality})`
-    : "System default";
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.container}>
-          <View style={styles.controlsCard}>
-            <Text style={styles.sectionLabel}>Speech Settings</Text>
-            <SelectorField
-              label="Language"
-              value={languageLabel}
-              disabled={languageOptions.length === 0}
-              onPress={() => setActiveSelector("language")}
-            />
-            <SelectorField
-              label="Voice"
-              value={voiceLabel}
-              disabled={voiceSelectorDisabled}
-              onPress={() => setActiveSelector("voice")}
-            />
+          <View style={[styles.setupCard, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <Text style={[styles.setupSectionLabel, { color: c.inkDim }]}>Voice</Text>
             <Pressable
-              accessibilityRole="button"
-              disabled={!sessionId}
-              onPress={() => void handleResetConversation()}
-              style={({ pressed }) => [
-                styles.resetButton,
-                !sessionId ? styles.resetButtonDisabled : null,
-                pressed && sessionId ? styles.resetButtonPressed : null,
-              ]}
+              onPress={() => setShowVoicePicker(true)}
+              style={({ pressed }) => [styles.setupSelector, { backgroundColor: c.surface2, borderColor: c.borderHi }, pressed && { opacity: 0.7 }]}
             >
-              <Text style={styles.resetButtonText}>End Conversation</Text>
+              <Text style={[styles.setupSelectorText, { color: c.ink }]}>{selectedVoice ? `${selectedVoice.name} (${selectedVoice.language})` : "System default"}</Text>
+              <Text style={{ color: c.inkDim, fontSize: 12 }}>Change</Text>
             </Pressable>
-            <View style={styles.metaPanel}>
-              <Text style={styles.metaLabel}>Session</Text>
-              <Text style={styles.metaValue}>
-                {sessionId.trim() || "No active session"}
-              </Text>
-              <Text style={styles.metaLabel}>Tokens Used</Text>
-              <Text style={styles.metaValue}>
-                {formatTokenUsage(tokenUsage)}
-              </Text>
-            </View>
-            <View style={styles.uploadActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handleTakePhoto()}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Take Photo</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handlePickFiles()}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Upload File</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              disabled={!attachments.length || uploadBusy}
-              onPress={() => void handleSendAttachments()}
-              style={({ pressed }) => [
-                styles.uploadSendButton,
-                !attachments.length || uploadBusy ? styles.resetButtonDisabled : null,
-                pressed && attachments.length && !uploadBusy ? styles.resetButtonPressed : null,
-              ]}
-            >
-              <Text style={styles.uploadSendButtonText}>
-                {uploadBusy ? "Sending..." : "Send Attached Files"}
-              </Text>
-            </Pressable>
-            {attachments.length ? (
-              <View style={styles.attachmentList}>
-                {attachments.map((attachment, index) => (
-                  <Pressable
-                    key={`${attachment.name}-${attachment.uri}`}
-                    onPress={() => handleRemoveAttachment(index)}
-                    style={({ pressed }) => [
-                      styles.attachmentChip,
-                      pressed ? styles.attachmentChipPressed : null,
-                    ]}
-                  >
-                    <Text style={styles.attachmentChipText}>{attachment.name}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
           </View>
-
-          <View style={styles.transcriptCard}>
-            <Text style={styles.sectionLabel}>{panelLabel}</Text>
-            <ScrollView
-              style={styles.panelScroll}
-              contentContainerStyle={styles.panelScrollContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={displayReply}
-            >
-              <Text style={displayReply ? styles.replyText : styles.transcriptText}>
-                {panelText}
-              </Text>
-            </ScrollView>
-          </View>
-
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
           <Pressable
-            accessibilityRole="button"
-            disabled={buttonDisabled}
-            onPress={() => void handleMainButtonPress()}
-            style={({ pressed }) => [
-              styles.button,
-              buttonDisabled ? styles.buttonDisabled : null,
-              pressed && !buttonDisabled ? styles.buttonPressed : null,
-            ]}
+            onPress={startConversation}
+            disabled={!selectedVoice}
+            style={({ pressed }) => [styles.startBtn, { backgroundColor: c.navy }, pressed && { opacity: 0.8 }]}
           >
-            {status === "checking" ? (
-              <ActivityIndicator color="#f4efe6" />
-            ) : (
-              <Text style={styles.buttonText}>{getButtonLabel(status)}</Text>
-            )}
+            <Text style={styles.startBtnText}>Start Conversation</Text>
           </Pressable>
 
-          <Text style={styles.statusText}>{getStatusMessage(status)}</Text>
+          <VoicePickerModal
+            visible={showVoicePicker}
+            voices={availableVoices}
+            selectedVoice={selectedVoice}
+            onSelect={(v) => { setSelectedVoice(v); setShowVoicePicker(false); }}
+            onClose={() => setShowVoicePicker(false)}
+            colors={c}
+          />
         </View>
-      </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
-      <SelectionModal
-        title="Choose language"
-        visible={activeSelector === "language"}
-        options={languageOptions.map((language) => ({
-          key: language,
-          label: formatLanguageLabel(language),
-        }))}
-        selectedKey={selectedLanguage}
-        onClose={() => setActiveSelector(null)}
-        onSelect={handleLanguageSelect}
-      />
+  // ── Main chat screen ──
+  const hasMessages = messages.length > 0;
+  const displayTitle = workflowTitle || "E-Service Workflow Runtime";
+  const displaySubtitle = workflowId ? `Detected workflow: ${workflowId}` : "Secure document and identity services";
+  const isListening = status === "listening";
+  const isProcessing = status === "processing";
+  const isSpeaking = status === "speaking";
 
-      <SelectionModal
-        title="Choose voice"
-        visible={activeSelector === "voice"}
-        options={voicesForLanguage.map((voice) => ({
-          key: voice.identifier,
-          label: `${voice.name} (${voice.quality})`,
-        }))}
-        selectedKey={selectedVoiceId}
-        onClose={() => setActiveSelector(null)}
-        onSelect={handleVoiceSelect}
-      />
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: c.bg }]}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: c.surface, borderColor: c.border }]}>
+          <View style={styles.headerLeft}>
+            <View style={[styles.statusDot, { backgroundColor: isListening ? "#22d36b" : isProcessing ? "#f0ad4e" : isSpeaking ? "#5bc0de" : "#22d36b" }]} />
+            <View>
+              <Text style={[styles.headerTitle, { color: c.ink }]}>{displayTitle}</Text>
+              <Text style={[styles.headerSubtitle, { color: c.inkDim }]}>{displaySubtitle}</Text>
+            </View>
+          </View>
+          <Pressable onPress={() => setInfoExpanded((v) => !v)} style={({ pressed }) => [styles.infoToggle, pressed && { opacity: 0.7 }]}>
+            <Text style={{ color: c.red, fontSize: 12, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" }}>
+              {sessionId ? "Session" : "Info"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Info panel */}
+        {infoExpanded && (
+          <View style={[styles.infoPanel, { backgroundColor: c.surface, borderColor: c.border }]}>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoKey, { color: c.inkDim }]}>Session ID</Text>
+              <Text style={[styles.infoVal, { color: c.ink }]} numberOfLines={1}>{sessionId || "—"}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoKey, { color: c.inkDim }]}>Workflow</Text>
+              <Text style={[styles.infoVal, { color: c.ink }]} numberOfLines={1}>{workflowTitle || workflowId || "Auto-detect"}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoKey, { color: c.inkDim }]}>Tokens</Text>
+              <Text style={[styles.infoVal, { color: c.ink }]}>{formatTokenUsage(tokenUsage)}</Text>
+            </View>
+            <View style={styles.infoActions}>
+              <Pressable onPress={toggleTheme} style={({ pressed }) => [styles.infoBtn, pressed && { opacity: 0.7 }]}>
+                <Text style={{ color: c.navyMid, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" }}>
+                  {colorScheme === "dark" ? "Light mode" : "Dark mode"}
+                </Text>
+              </Pressable>
+              <Pressable onPress={handleReset} disabled={!sessionId} style={({ pressed }) => [styles.infoBtn, !sessionId && { opacity: 0.5 }, pressed && sessionId && { opacity: 0.7 }]}>
+                <Text style={[styles.infoBtnDanger, { color: c.red }]}>End Conversation</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Welcome */}
+        {!hasMessages && !isProcessing && !isSpeaking && (
+          <View style={styles.welcome}>
+            <Text style={[styles.welcomeTitle, { color: c.ink }]}>Welcome to IDWay</Text>
+            <Text style={[styles.welcomeSub, { color: c.inkDim }]}>
+              Speak naturally — the agent will listen, respond, and continue the conversation.
+            </Text>
+            {isListening && (
+              <View style={styles.listeningIndicator}>
+                <ListeningAnimation />
+                <Text style={{ color: c.inkDim, fontSize: 13, marginTop: 8 }}>Listening…</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Messages */}
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(_, i) => String(i)}
+          style={styles.messagesList}
+          contentContainerStyle={[styles.messagesContent, !hasMessages && styles.messagesEmpty]}
+          renderItem={({ item }) => (
+            <View style={[styles.msgWrap, item.role === "user" ? styles.msgWrapUser : styles.msgWrapAssistant, { maxWidth: "82%" }]}>
+              <Text style={[styles.msgRole, { color: c.inkFaint }]}>{item.role === "user" ? "You" : "IDWay Agent"}</Text>
+              <View style={[styles.msgBubble, item.role === "user"
+                ? [styles.msgBubbleUser, { backgroundColor: c.userBg }]
+                : [styles.msgBubbleAssistant, { backgroundColor: c.botBg, borderColor: c.botBorder, borderTopColor: c.navyMid }]
+              ]}>
+                <Text style={[styles.msgText, { color: item.role === "user" ? c.userInk : c.ink }]}>{item.text}</Text>
+              </View>
+              {item.files && item.files.length > 0 && (
+                <View style={styles.msgFiles}>
+                  {item.files.map((f: Attachment, i: number) => (
+                    <View key={i} style={[styles.msgFileChip, { backgroundColor: "rgba(255,255,255,0.1)", borderColor: "rgba(255,255,255,0.18)" }]}>
+                      <Text style={{ color: c.userInk, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" }}>{f.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+          onContentSizeChange={scrollToEnd}
+        />
+
+        {/* Status indicator */}
+        {(isProcessing || isSpeaking) && (
+          <View style={[styles.statusBar, { backgroundColor: c.surface, borderColor: c.border }]}>
+            {isProcessing ? (
+              <View style={styles.statusRow}>
+                <ActivityIndicator size="small" color={c.navyLight} />
+                <Text style={[styles.statusText, { color: c.inkDim, marginLeft: 8 }]}>Agent is thinking…</Text>
+              </View>
+            ) : (
+              <View style={styles.statusRow}>
+                <SpeakingIndicator />
+                <Text style={[styles.statusText, { color: c.inkDim, marginLeft: 8 }]}>Speaking…</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Error */}
+        {error ? <Text style={[styles.errorText, { color: c.red }]}>{error}</Text> : null}
+
+        {/* Attachments */}
+        {attachments.length > 0 && (
+          <View style={[styles.attachRow, { backgroundColor: c.surface }]}>
+            {attachments.map((a, i) => (
+              <View key={i} style={[styles.attachChip, { backgroundColor: c.surface2, borderColor: c.borderHi }]}>
+                <Text style={[styles.attachChipText, { color: c.ink }]} numberOfLines={1}>{a.name}</Text>
+                <Pressable onPress={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} hitSlop={8}>
+                  <Text style={{ color: c.red, fontSize: 14, fontWeight: "700" }}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Composer */}
+        <View style={[styles.composerWrap, { backgroundColor: c.bg }]}>
+          <View style={[styles.composer, { backgroundColor: c.surface, borderColor: c.border, borderTopColor: c.navyMid }]}>
+            <TextInput
+              style={[styles.input, { color: c.ink }]}
+              placeholder="Type a message or speak…"
+              placeholderTextColor={c.inkFaint}
+              multiline
+              value={input}
+              onChangeText={setInput}
+              editable={!isProcessing}
+            />
+            <View style={styles.composerRow}>
+              <View style={styles.composerLeft}>
+                <Pressable onPress={handleTakePhoto} disabled={isProcessing} style={({ pressed }) => [styles.composerBtn, pressed && { opacity: 0.7 }]}>
+                  <Text style={[styles.composerBtnText, { color: c.inkDim }]}>📷 Photo</Text>
+                </Pressable>
+                <Pressable onPress={handlePickFiles} disabled={isProcessing} style={({ pressed }) => [styles.composerBtn, pressed && { opacity: 0.7 }]}>
+                  <Text style={[styles.composerBtnText, { color: c.inkDim }]}>📎 File</Text>
+                </Pressable>
+                {!isListening && !isProcessing && !isSpeaking && (
+                  <Pressable onPress={startSTT} style={({ pressed }) => [styles.composerBtn, pressed && { opacity: 0.7 }]}>
+                    <Text style={[styles.composerBtnText, { color: c.inkDim }]}>🎤 Speak</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Pressable
+                onPress={sendMessage}
+                disabled={isProcessing || (!input.trim() && !attachments.length)}
+                style={({ pressed }) => [styles.sendBtn, { backgroundColor: c.navy }, (isProcessing || (!input.trim() && !attachments.length)) && { opacity: 0.45 }, pressed && { transform: [{ scale: 0.97 }] }]}
+              >
+                <Text style={styles.sendBtnText}>{isProcessing ? "…" : "Send"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-type SelectorFieldProps = {
-  label: string;
-  value: string;
-  disabled?: boolean;
-  onPress: () => void;
-};
-
-function SelectorField({
-  label,
-  value,
-  disabled = false,
-  onPress,
-}: SelectorFieldProps) {
+// ── Listening Animation ──
+function ListeningAnimation() {
+  const anim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(anim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 1, duration: 600, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [anim]);
   return (
-    <View style={styles.selectorRow}>
-      <Text style={styles.selectorLabel}>{label}</Text>
-      <Pressable
-        accessibilityRole="button"
-        disabled={disabled}
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.selectorButton,
-          disabled ? styles.selectorButtonDisabled : null,
-          pressed && !disabled ? styles.selectorButtonPressed : null,
-        ]}
-      >
-        <Text style={styles.selectorValue}>{value}</Text>
-        <Text style={styles.selectorChevron}>Select</Text>
-      </Pressable>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      {[0, 1, 2].map((i) => (
+        <Animated.View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22d36b", opacity: anim }} />
+      ))}
     </View>
   );
 }
 
-type SelectionModalProps = {
-  title: string;
-  visible: boolean;
-  options: { key: string; label: string }[];
-  selectedKey: string;
-  onClose: () => void;
-  onSelect: (key: string) => void;
-};
-
-function SelectionModal({
-  title,
-  visible,
-  options,
-  selectedKey,
-  onClose,
-  onSelect,
-}: SelectionModalProps) {
+// ── Speaking Indicator (soundwave bars) ──
+function SpeakingIndicator() {
+  const bars = useRef([0, 1, 2, 3, 4].map(() => new Animated.Value(0.3))).current;
+  useEffect(() => {
+    const anims = bars.map((bar, i) =>
+      Animated.loop(Animated.sequence([
+        Animated.timing(bar, { toValue: 1, duration: 400 + i * 80, useNativeDriver: true }),
+        Animated.timing(bar, { toValue: 0.3, duration: 400 + i * 80, useNativeDriver: true }),
+      ]))
+    );
+    Animated.parallel(anims).start();
+    return () => { anims.forEach((a) => a.stop()); };
+  }, [bars]);
   return (
-    <Modal
-      animationType="fade"
-      transparent
-      visible={visible}
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalBackdrop}>
-        <Pressable style={styles.modalDismissArea} onPress={onClose} />
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>{title}</Text>
-          <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-            {options.map((option) => {
-              const selected = option.key === selectedKey;
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, height: 20 }}>
+      {bars.map((bar, i) => (
+        <Animated.View key={i} style={[speakingStyles.bar, { opacity: bar, height: 8 + i * 3 }]} />
+      ))}
+    </View>
+  );
+}
 
-              return (
-                <Pressable
-                  key={option.key}
-                  onPress={() => onSelect(option.key)}
-                  style={({ pressed }) => [
-                    styles.modalOption,
-                    selected ? styles.modalOptionSelected : null,
-                    pressed ? styles.modalOptionPressed : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.modalOptionText,
-                      selected ? styles.modalOptionTextSelected : null,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <Pressable onPress={onClose} style={styles.modalCloseButton}>
-            <Text style={styles.modalCloseText}>Close</Text>
+const speakingStyles = StyleSheet.create({
+  bar: {
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: "#243d99",
+  },
+});
+
+// ── Voice Picker Modal ──
+function VoicePickerModal({ visible, voices, selectedVoice, onSelect, onClose, colors }: {
+  visible: boolean;
+  voices: Voice[];
+  selectedVoice: Voice | null;
+  onSelect: (voice: Voice) => void;
+  onClose: () => void;
+  colors: Record<string, string>;
+}) {
+  const grouped = voices.reduce<Record<string, Voice[]>>((acc, v) => {
+    (acc[v.language] = acc[v.language] || []).push(v);
+    return acc;
+  }, {});
+  const languages = Object.keys(grouped).sort();
+
+  return (
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+      <View style={[modalStyles.backdrop, { backgroundColor: "rgba(8,15,30,0.6)" }]}>
+        <Pressable style={modalStyles.dismiss} onPress={onClose} />
+        <View style={[modalStyles.card, { backgroundColor: colors.surface }]}>
+          <Text style={[modalStyles.title, { color: colors.ink }]}>Choose Voice</Text>
+          <FlatList
+            data={languages}
+            keyExtractor={(l) => l}
+            style={{ maxHeight: 400 }}
+            renderItem={({ item: lang }) => (
+              <View>
+                <Text style={[modalStyles.langLabel, { color: colors.inkDim }]}>{lang}</Text>
+                {grouped[lang].map((voice) => {
+                  const selected = selectedVoice?.identifier === voice.identifier;
+                  return (
+                    <Pressable
+                      key={voice.identifier}
+                      onPress={() => onSelect(voice)}
+                      style={({ pressed }) => [modalStyles.option, selected && { backgroundColor: colors.surface2 }, pressed && { opacity: 0.7 }]}
+                    >
+                      <Text style={[modalStyles.optionText, { color: colors.ink }, selected && { fontWeight: "800" }]}>
+                        {voice.name} ({voice.quality})
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          />
+          <Pressable onPress={onClose} style={[modalStyles.closeBtn, { backgroundColor: colors.navy }]}>
+            <Text style={modalStyles.closeText}>Close</Text>
           </Pressable>
         </View>
       </View>
@@ -730,163 +664,19 @@ function SelectionModal({
   );
 }
 
-function formatRecognitionError(event: ExpoSpeechRecognitionErrorEvent) {
-  if (event.error === "service-not-allowed") {
-    return getUnavailableMessage();
-  }
+const modalStyles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: "flex-end" },
+  dismiss: { flex: 1 },
+  card: { maxHeight: "70%", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28, gap: 14 },
+  title: { fontSize: 18, fontWeight: "800" },
+  langLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", marginTop: 12, marginBottom: 4, paddingHorizontal: 4 },
+  option: { minHeight: 44, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, justifyContent: "center" },
+  optionText: { fontSize: 14, fontWeight: "500" },
+  closeBtn: { minHeight: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  closeText: { color: "#ffffff", fontSize: 14, fontWeight: "800" },
+});
 
-  if (event.error === "not-allowed") {
-    return "Microphone or speech recognition permission was denied.";
-  }
-
-  if (event.error === "no-speech" || event.error === "speech-timeout") {
-    return "I didn't catch that. Tap again and speak clearly.";
-  }
-
-  return `Speech recognition failed: ${event.message}`;
-}
-
-function getUnavailableMessage() {
-  if (Platform.OS !== "android") {
-    return "Speech recognition is not available on this device.";
-  }
-
-  const services = ExpoSpeechRecognitionModule.getSpeechRecognitionServices();
-  const defaultService =
-    ExpoSpeechRecognitionModule.getDefaultRecognitionService().packageName;
-
-  if (services.length === 0) {
-    return "No Android speech recognition service is installed. Use a physical device or a Google Play emulator image.";
-  }
-
-  if (!defaultService) {
-    return `Speech recognition services exist (${services.join(", ")}) but none is configured as default. Set a default voice input service in Android settings.`;
-  }
-
-  return `Speech recognition is unavailable. Default service: ${defaultService}.`;
-}
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return `${fallback} ${error.message}`;
-  }
-
-  if (typeof error === "string" && error.trim()) {
-    return `${fallback} ${error}`;
-  }
-
-  return fallback;
-}
-
-function sortVoices(voices: Voice[]) {
-  return [...voices].sort((left, right) => {
-    const languageCompare = left.language.localeCompare(right.language);
-    if (languageCompare !== 0) {
-      return languageCompare;
-    }
-
-    const qualityCompare = right.quality.localeCompare(left.quality);
-    if (qualityCompare !== 0) {
-      return qualityCompare;
-    }
-
-    return left.name.localeCompare(right.name);
-  });
-}
-
-function getLanguageOptions(voices: Voice[]) {
-  return [...new Set(voices.map((voice) => voice.language))];
-}
-
-function pickInitialLanguage(voices: Voice[], fallbackLanguage: string) {
-  const languages = getLanguageOptions(voices);
-  return languages.includes(fallbackLanguage) ? fallbackLanguage : languages[0] ?? fallbackLanguage;
-}
-
-function pickVoiceForLanguage(voices: Voice[], language: string) {
-  return voices.find((voice) => voice.language === language) ?? null;
-}
-
-function formatLanguageLabel(language: string) {
-  return language.replace(/_/g, "-");
-}
-
-function getButtonLabel(status: Status) {
-  if (status === "listening") {
-    return "Listening...";
-  }
-
-  if (status === "speaking") {
-    return "Stop Speaking";
-  }
-
-  return "Tap To Speak";
-}
-
-function getStatusMessage(status: Status) {
-  switch (status) {
-    case "checking":
-      return "Preparing the recognizer.";
-    case "ready":
-      return "Ready for the next prompt.";
-    case "listening":
-      return "Listening until you stop speaking.";
-    case "processing":
-      return "Sending the prompt to the assistant.";
-    case "speaking":
-      return "Speaking the assistant response.";
-    case "error":
-      return "The request could not be completed.";
-    default:
-      return "Waiting.";
-  }
-}
-
-async function requestAssistantReply(
-  prompt: string,
-  sessionId?: string,
-  attachments: Attachment[] = []
-) {
-  const requestPrompt = buildPrompt(prompt);
-  const response = attachments.length
-    ? await sendMultipartRequest(requestPrompt, sessionId, attachments)
-    : await fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: requestPrompt,
-          workflow_session_id: sessionId || undefined,
-        }),
-      });
-
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        workflow_session_id?: string;
-        session_id?: string;
-        response?: string;
-        detail?: string;
-        token_usage?: Partial<TokenUsage>;
-      }
-    | null;
-
-  if (!response.ok) {
-    throw new Error(payload?.detail || "The backend returned an error.");
-  }
-
-  const assistantReply = payload?.response?.trim();
-  if (!assistantReply) {
-    throw new Error("The assistant returned an empty response.");
-  }
-
-  return {
-    assistantReply,
-    sessionId: payload?.workflow_session_id?.trim() || payload?.session_id?.trim() || "",
-    tokenUsage: normalizeTokenUsage(payload?.token_usage),
-  };
-}
-
+// ── Helper functions ──
 function normalizeTokenUsage(tokenUsage?: Partial<TokenUsage> | null): TokenUsage {
   return {
     prompt_tokens: Math.max(0, Number(tokenUsage?.prompt_tokens || 0)),
@@ -896,414 +686,106 @@ function normalizeTokenUsage(tokenUsage?: Partial<TokenUsage> | null): TokenUsag
 }
 
 function formatTokenUsage(tokenUsage: TokenUsage) {
-  return `${tokenUsage.total_tokens} total (${tokenUsage.prompt_tokens} prompt / ${tokenUsage.completion_tokens} completion)`;
-}
-
-async function sendMultipartRequest(
-  prompt: string,
-  sessionId: string | undefined,
-  attachments: Attachment[]
-) {
-  const formData = new FormData();
-  formData.append("prompt", prompt);
-
-  if (sessionId?.trim()) {
-    formData.append("workflow_session_id", sessionId.trim());
-  }
-
-  attachments.forEach((attachment) => {
-    formData.append("file", {
-      uri: attachment.uri,
-      name: attachment.name,
-      type: attachment.type,
-    } as never);
-  });
-
-  return fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/chat`, {
-    method: "POST",
-    body: formData,
-  });
-}
-
-async function deleteConversationSession(sessionId: string) {
-  const trimmedSessionId = sessionId.trim();
-  if (!trimmedSessionId) {
-    return;
-  }
-
-  try {
-    await fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/sessions/${encodeURIComponent(trimmedSessionId)}`, {
-      method: "DELETE",
-    });
-  } catch {
-    // Best-effort cleanup for an in-memory session.
-  }
-}
-
-function buildPrompt(userPrompt: string) {
-  const basePrompt = appConfig.mobile?.basePrompt?.trim();
-  const cleanedUserPrompt = userPrompt.trim();
-
-  if (!basePrompt) {
-    return cleanedUserPrompt;
-  }
-
-  return `${basePrompt}\n\nUser prompt:\n${cleanedUserPrompt}`;
-}
-
-async function compressImage(uri: string) {
-  return ImageManipulator.manipulateAsync(uri, [], {
-    compress: 0.6,
-    format: ImageManipulator.SaveFormat.JPEG,
-  });
-}
-
-function guessMimeType(filename: string) {
-  const lower = filename.toLowerCase();
-  if (lower.endsWith(".pdf")) {
-    return "application/pdf";
-  }
-  if (lower.endsWith(".png")) {
-    return "image/png";
-  }
-  return "image/jpeg";
+  return `${tokenUsage.total_tokens} total · ${tokenUsage.prompt_tokens} prompt · ${tokenUsage.completion_tokens} completion`;
 }
 
 function getBackendUrl() {
   const explicitUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (explicitUrl) {
-    return explicitUrl.replace(/\/$/, "");
-  }
-
-  const configBackendUrl = appConfig.mobile?.backendUrl;
-
-  if (Platform.OS === "android") {
-    return (configBackendUrl?.android || configBackendUrl?.default || "").replace(/\/$/, "");
-  }
-
-  if (Platform.OS === "ios") {
-    return (configBackendUrl?.ios || configBackendUrl?.default || "").replace(/\/$/, "");
-  }
-
-  const hostUri = Constants.expoConfig?.hostUri;
-  const host = hostUri?.split(":")[0];
-
-  const defaultUrl = (configBackendUrl?.default || "").replace(/\/$/, "");
-
-  return host ? defaultUrl : defaultUrl;
+  if (explicitUrl) return explicitUrl.replace(/\/$/, "");
+  const configUrl = appConfig.mobile?.backendUrl;
+  if (Platform.OS === "android") return (configUrl?.android || configUrl?.default || "").replace(/\/$/, "");
+  if (Platform.OS === "ios") return (configUrl?.ios || configUrl?.default || "").replace(/\/$/, "");
+  return (configUrl?.default || "").replace(/\/$/, "");
 }
 
 function getWorkflowId() {
-  const explicitId = process.env.EXPO_PUBLIC_WORKFLOW_ID?.trim();
-  if (explicitId) {
-    return explicitId;
-  }
-
+  const explicit = process.env.EXPO_PUBLIC_WORKFLOW_ID?.trim();
+  if (explicit) return explicit;
   return appConfig.mobile?.workflowId?.trim() || "us_nonimmigrant_visa";
 }
 
+function guessMimeType(filename: string) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".png")) return "image/png";
+  return "image/jpeg";
+}
+
+// ── Styles ──
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#eef3fb",
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  container: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    justifyContent: "center",
-    gap: 16,
-    backgroundColor: "#eef3fb",
-    flexGrow: 1,
-  },
-  controlsCard: {
-    padding: 18,
-    borderRadius: 22,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#c7d4eb",
-    gap: 12,
-    shadowColor: "#0f3d91",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
-  },
-  transcriptCard: {
-    height: 220,
-    padding: 18,
-    borderRadius: 22,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#c7d4eb",
-    shadowColor: "#0f3d91",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
-  },
-  panelScroll: {
-    flex: 1,
-  },
-  panelScrollContent: {
-    paddingBottom: 4,
-  },
-  sectionLabel: {
-    color: "#0f3d91",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  transcriptText: {
-    color: "#10284c",
-    fontSize: 17,
-    lineHeight: 24,
-    fontWeight: "600",
-  },
-  replyText: {
-    color: "#10284c",
-    fontSize: 16,
-    lineHeight: 23,
-    fontWeight: "500",
-  },
-  errorText: {
-    color: "#c9163a",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  selectorRow: {
-    gap: 6,
-  },
-  selectorLabel: {
-    color: "#1c3f78",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  selectorButton: {
-    minHeight: 48,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#b9cae6",
-    backgroundColor: "#f7faff",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  selectorButtonDisabled: {
-    opacity: 0.55,
-  },
-  selectorButtonPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  selectorValue: {
-    flex: 1,
-    color: "#10284c",
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: "600",
-  },
-  selectorChevron: {
-    color: "#0f3d91",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  resetButton: {
-    minHeight: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#b9cae6",
-    backgroundColor: "#edf4ff",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-  },
-  resetButtonDisabled: {
-    opacity: 0.5,
-  },
-  resetButtonPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  resetButtonText: {
-    color: "#0f3d91",
-    fontSize: 13,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  metaPanel: {
-    gap: 4,
-    borderWidth: 1,
-    borderColor: "#c7d4eb",
-    borderRadius: 16,
-    backgroundColor: "#f7faff",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  metaLabel: {
-    color: "#58739a",
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginTop: 2,
-  },
-  metaValue: {
-    color: "#10284c",
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
-  uploadActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  secondaryButton: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#b9cae6",
-    backgroundColor: "#f4f8ff",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  secondaryButtonPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  secondaryButtonText: {
-    color: "#0f3d91",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  uploadSendButton: {
-    minHeight: 42,
-    borderRadius: 14,
-    backgroundColor: "#0f3d91",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-  },
-  uploadSendButtonText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  attachmentList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  attachmentChip: {
-    borderRadius: 999,
-    backgroundColor: "#e3edfb",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  attachmentChipPressed: {
-    opacity: 0.8,
-  },
-  attachmentChipText: {
-    color: "#163867",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  button: {
-    minHeight: 54,
-    borderRadius: 999,
-    backgroundColor: "#0f3d91",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  statusText: {
-    color: "#34527f",
-    textAlign: "center",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(8, 32, 84, 0.35)",
-    justifyContent: "flex-end",
-  },
-  modalDismissArea: {
-    flex: 1,
-  },
-  modalCard: {
-    maxHeight: "70%",
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 28,
-    gap: 14,
-  },
-  modalTitle: {
-    color: "#0f3d91",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  modalList: {
-    maxHeight: 320,
-  },
-  modalOption: {
-    minHeight: 48,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    justifyContent: "center",
-  },
-  modalOptionSelected: {
-    backgroundColor: "#e7f0ff",
-  },
-  modalOptionPressed: {
-    opacity: 0.8,
-  },
-  modalOptionText: {
-    color: "#10284c",
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: "500",
-  },
-  modalOptionTextSelected: {
-    fontWeight: "800",
-  },
-  modalCloseButton: {
-    minHeight: 48,
-    borderRadius: 16,
-    backgroundColor: "#0f3d91",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalCloseText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "800",
-  },
+  safeArea: { flex: 1 },
+  flex: { flex: 1 },
+
+  // Setup
+  setupContainer: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32, gap: 20 },
+  setupTitle: { fontSize: 28, fontWeight: "800", letterSpacing: 0.5, textAlign: "center" },
+  setupSub: { fontSize: 14, lineHeight: 22, textAlign: "center", maxWidth: 340 },
+  setupCard: { width: "100%", padding: 18, borderRadius: 14, borderWidth: 1, gap: 12 },
+  setupSectionLabel: { fontSize: 11, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase" },
+  setupSelector: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12, borderRadius: 10, borderWidth: 1 },
+  setupSelectorText: { fontSize: 14, fontWeight: "600", flex: 1 },
+  startBtn: { width: "100%", paddingVertical: 16, borderRadius: 12, alignItems: "center" },
+  startBtnText: { color: "#ffffff", fontSize: 16, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
+
+  // Header
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, height: 52, borderBottomWidth: 1 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  headerTitle: { fontSize: 15, fontWeight: "700", letterSpacing: 0.5 },
+  headerSubtitle: { fontSize: 11, marginTop: 1 },
+  infoToggle: { paddingHorizontal: 8, paddingVertical: 6 },
+
+  // Info panel
+  infoPanel: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, gap: 8 },
+  infoRow: { flexDirection: "row", gap: 8 },
+  infoKey: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase", width: 72 },
+  infoVal: { fontSize: 12, fontWeight: "500", flex: 1 },
+  infoActions: { flexDirection: "row", gap: 12, marginTop: 4 },
+  infoBtn: { paddingVertical: 6, paddingHorizontal: 10 },
+  infoBtnDanger: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
+
+  // Welcome
+  welcome: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 12 },
+  welcomeTitle: { fontSize: 26, fontWeight: "800", letterSpacing: 0.5, textAlign: "center" },
+  welcomeSub: { fontSize: 14, lineHeight: 22, textAlign: "center", maxWidth: 360 },
+  listeningIndicator: { alignItems: "center", marginTop: 16 },
+
+  // Messages
+  messagesList: { flex: 1 },
+  messagesContent: { padding: 16, paddingBottom: 8, gap: 14 },
+  messagesEmpty: { flex: 1 },
+  msgWrap: { gap: 4 },
+  msgWrapUser: { alignSelf: "flex-end", alignItems: "flex-end" },
+  msgWrapAssistant: { alignSelf: "flex-start", alignItems: "flex-start" },
+  msgRole: { fontSize: 10, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" },
+  msgBubble: { paddingVertical: 11, paddingHorizontal: 15, borderRadius: 10 },
+  msgBubbleUser: { borderLeftWidth: 3, borderLeftColor: "#d0142c", borderTopLeftRadius: 4, borderBottomRightRadius: 10 },
+  msgBubbleAssistant: { borderWidth: 1, borderTopWidth: 2, borderTopLeftRadius: 10, borderBottomLeftRadius: 4 },
+  msgText: { fontSize: 15, lineHeight: 22 },
+  msgFiles: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 4 },
+  msgFileChip: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: 6, borderWidth: 1 },
+
+  // Status bar
+  statusBar: { paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
+  statusRow: { flexDirection: "row", alignItems: "center" },
+  statusText: { fontSize: 13, fontWeight: "500" },
+
+  // Error
+  errorText: { fontSize: 13, lineHeight: 18, paddingHorizontal: 16, paddingBottom: 4 },
+
+  // Attachments
+  attachRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 16, paddingVertical: 8 },
+  attachChip: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 5, paddingHorizontal: 12, borderRadius: 6, borderWidth: 1 },
+  attachChipText: { fontSize: 12, fontWeight: "600", maxWidth: 160 },
+
+  // Composer
+  composerWrap: { paddingHorizontal: 12, paddingBottom: 12, paddingTop: 4 },
+  composer: { borderWidth: 1, borderRadius: 10, padding: 12, gap: 8 },
+  input: { minHeight: 44, maxHeight: 120, fontSize: 15, lineHeight: 22, textAlignVertical: "top" },
+  composerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  composerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  composerBtn: { paddingVertical: 6, paddingHorizontal: 10 },
+  composerBtnText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.5 },
+  sendBtn: { paddingVertical: 10, paddingHorizontal: 22, borderRadius: 6 },
+  sendBtnText: { color: "#ffffff", fontSize: 13, fontWeight: "800", letterSpacing: 0.8, textTransform: "uppercase" },
 });

@@ -1,157 +1,200 @@
-"""
-dynamic_server.py
-=================
-FastAPI router that mounts the Schema-Driven State Machine onto the existing
-application.
-
-Routes
-------
-POST /dynamic/blueprints
-    Register (or update) a Blueprint server-side.  Returns blueprint_id.
-
-GET  /dynamic/blueprints
-    List all registered blueprint IDs.
-
-GET  /dynamic/blueprints/{blueprint_id}
-    Retrieve a registered Blueprint by ID.
-
-DELETE /dynamic/blueprints/{blueprint_id}
-    Remove a registered Blueprint.
-
-POST /dynamic/chat
-    Main conversational endpoint.  Accepts a blueprint reference and a user
-    utterance.  Returns the assistant reply and updated form state.
-
-GET  /dynamic/sessions/{session_id}/state
-    Inspect the raw submission JSON for a session.
-
-DELETE /dynamic/sessions/{session_id}
-    Delete a session's in-memory conversation history.
-
-The router is imported and mounted in server.py via:
-    app.include_router(dynamic_router)
-"""
-
 from __future__ import annotations
 
 import json
-from typing import Any
+import re
+from typing import Any, AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import HTTPException
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from .blueprint import (
-    Blueprint,
-    DynamicChatRequest,
-    DynamicChatResponse,
-    RegisterBlueprintRequest,
-    RegisterBlueprintResponse,
-)
+from .blueprint import Blueprint, DynamicChatResponse
 from .config import OLLAMA_MODEL, RECENT_MESSAGE_COUNT
 from .document_utils import build_document_payload
 from .form_engine import _submission_path, apply_tool_call, prepare_turn
-from .ollama_client import extract_token_usage, ollama_chat_completion
+from .ollama_client import extract_token_usage, ollama_chat_completion, ollama_chat_completion_stream
 from .repositories import blueprint_repository, submission_repository
 from .session_store import (
     SessionState,
     cache_documents,
-    delete_session,
     get_token_usage,
     get_or_create_session,
     record_token_usage,
     update_session_state,
 )
 
-dynamic_router = APIRouter(prefix="/dynamic", tags=["Dynamic Schema-Driven"])
 
-def _get_blueprint(blueprint_id: str) -> Blueprint:
-    bp = blueprint_repository.get(blueprint_id)
-    if bp is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Blueprint '{blueprint_id}' is not registered. POST it to /dynamic/blueprints first.",
-        )
-    return bp
+_MAX_TOOL_ROUNDS = 8
 
 
-# ---------------------------------------------------------------------------
-# Blueprint management routes
-# ---------------------------------------------------------------------------
+async def run_dynamic_blueprint_turn_stream(
+    *,
+    session: SessionState,
+    blueprint: Blueprint,
+    prompt: str,
+    reset: bool = False,
+    files: list[StarletteUploadFile] | None = None,
+) -> AsyncGenerator[dict[str, Any], None]:
+    document_payload = await build_document_payload(files or [])
+    cache_documents(session, document_payload.vision_parts, document_payload.text_blocks)
 
+    ctx = prepare_turn(session.session_id, blueprint, reset=reset)
+    if ctx.is_complete:
+        yield {"event": "done", "data": {
+            "response": _build_user_visible_response(blueprint, ctx, blueprint.completion_message),
+            "completed": True,
+            "session_id": session.session_id,
+            "workflow_session_id": session.session_id,
+            "blueprint_id": blueprint.blueprint_id,
+            "missing_fields": [],
+            "filled_fields": ctx.filled_fields,
+            "submission_path": str(ctx.submission_path),
+            "token_usage": get_token_usage(session),
+        }}
+        return
 
-@dynamic_router.post("/blueprints", response_model=RegisterBlueprintResponse, status_code=201)
-async def register_blueprint(body: RegisterBlueprintRequest) -> RegisterBlueprintResponse:
-    """Register or overwrite a Blueprint. Idempotent."""
-    bp = body.blueprint
-    blueprint_repository.save(bp)
-    return RegisterBlueprintResponse(
-        blueprint_id=bp.blueprint_id,
-        field_count=len(bp.fields),
+    if document_payload.vision_parts or document_payload.text_blocks:
+        await _extract_dynamic_document_fields(session, blueprint, document_payload)
+        ctx = prepare_turn(session.session_id, blueprint)
+        if ctx.is_complete:
+            yield {"event": "done", "data": {
+                "response": _build_user_visible_response(blueprint, ctx, blueprint.completion_message),
+                "completed": True,
+                "session_id": session.session_id,
+                "workflow_session_id": session.session_id,
+                "blueprint_id": blueprint.blueprint_id,
+                "missing_fields": [],
+                "filled_fields": ctx.filled_fields,
+                "submission_path": str(ctx.submission_path),
+                "token_usage": get_token_usage(session),
+            }}
+            return
+
+    user_text = prompt.strip() or "Hello."
+    user_content = _build_user_content(user_text, document_payload, session)
+    update_session_state(
+        session,
+        message={"role": "user", "content": _build_session_user_summary(user_text, document_payload.filenames)},
     )
 
-
-@dynamic_router.get("/blueprints", response_model=list[str])
-async def list_blueprints() -> list[str]:
-    """List all registered blueprint IDs."""
-    return blueprint_repository.list_ids()
-
-
-@dynamic_router.get("/blueprints/{blueprint_id}", response_model=Blueprint)
-async def get_blueprint(blueprint_id: str) -> Blueprint:
-    """Return the full Blueprint document for the given ID."""
-    return _get_blueprint(blueprint_id)
-
-
-@dynamic_router.delete("/blueprints/{blueprint_id}")
-async def delete_blueprint(blueprint_id: str) -> dict[str, Any]:
-    """Unregister a Blueprint."""
-    if not blueprint_repository.delete(blueprint_id):
-        raise HTTPException(status_code=404, detail=f"Blueprint '{blueprint_id}' not found.")
-    return {"blueprint_id": blueprint_id, "deleted": True}
-
-
-# ---------------------------------------------------------------------------
-# Session state inspection
-# ---------------------------------------------------------------------------
-
-
-@dynamic_router.get("/sessions/{session_id}/state")
-async def get_session_state(session_id: str, blueprint_id: str) -> dict[str, Any]:
-    """
-    Return the raw submission JSON for a session.
-
-    Query parameter ``blueprint_id`` is required because the submission
-    filename includes the blueprint ID.
-    """
-    bp = _get_blueprint(blueprint_id)
-    path = _submission_path(session_id, bp.blueprint_id)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="No submission found for this session.")
-    return submission_repository.load_path(path)
-
-
-@dynamic_router.delete("/sessions/{session_id}")
-async def remove_dynamic_session(session_id: str) -> dict[str, Any]:
-    """Delete the in-memory conversation history for a session."""
-    deleted = delete_session(session_id)
-    return {"session_id": session_id, "deleted": deleted}
-
-
-# ---------------------------------------------------------------------------
-# Main chat endpoint
-# ---------------------------------------------------------------------------
-
-
-@dynamic_router.post("/chat", response_model=DynamicChatResponse)
-async def dynamic_chat(request: Request) -> DynamicChatResponse:
-    session_id, blueprint, prompt, reset, files = await _parse_dynamic_chat_request(request)
-    session = get_or_create_session(session_id, reset=reset)
-    return await run_dynamic_blueprint_turn(
+    stream = _run_dynamic_turn_stream(
         session=session,
         blueprint=blueprint,
-        prompt=prompt,
-        reset=reset,
-        files=files,
+        user_content=user_content,
+        ctx=ctx,
+    )
+
+    response_text = ""
+    data_was_saved = False
+
+    async for event in stream:
+        if event["event"] == "metadata":
+            response_text = event["data"].get("response_text", "")
+            data_was_saved = event["data"].get("data_was_saved", False)
+            continue
+        yield event
+
+    ctx = prepare_turn(session.session_id, blueprint)
+    if ctx.missing_fields and not data_was_saved and user_text.strip():
+        await _extract_dynamic_from_conversation(session, blueprint, user_text, response_text)
+        ctx = prepare_turn(session.session_id, blueprint)
+
+    final_response = _build_user_visible_response(blueprint, ctx, response_text)
+    yield {"event": "done", "data": {
+        "response": final_response,
+        "completed": ctx.is_complete,
+        "session_id": session.session_id,
+        "workflow_session_id": session.session_id,
+        "blueprint_id": blueprint.blueprint_id,
+        "missing_fields": ctx.missing_fields,
+        "filled_fields": ctx.filled_fields,
+        "submission_path": str(ctx.submission_path),
+        "token_usage": get_token_usage(session),
+    }}
+
+
+async def _run_dynamic_turn_stream(
+    session: SessionState,
+    blueprint: Blueprint,
+    user_content: list[dict[str, Any]],
+    ctx: Any,
+) -> AsyncGenerator[dict[str, Any], None]:
+    messages = _build_messages(session, ctx, user_content)
+    current_ctx = ctx
+    data_was_saved = False
+    response_text = ""
+
+    for _round in range(_MAX_TOOL_ROUNDS):
+        completion = await ollama_chat_completion(
+            messages,
+            tools=[current_ctx.tool_definition],
+            temperature=0.1,
+        )
+        usage = extract_token_usage(completion)
+        record_token_usage(
+            session,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+        )
+        message = completion.get("message") or {}
+        assistant_content = _extract_text(message)
+        tool_calls = list(message.get("tool_calls") or [])
+
+        assistant_payload: dict[str, Any] = {"role": "assistant"}
+        if assistant_content:
+            assistant_payload["content"] = assistant_content
+        if tool_calls:
+            assistant_payload["tool_calls"] = tool_calls
+        messages.append(assistant_payload)
+
+        if not tool_calls:
+            final_text = assistant_content.strip()
+            if not final_text:
+                raise HTTPException(status_code=502, detail="Ollama returned an empty response.")
+            update_session_state(session, message={"role": "assistant", "content": final_text})
+            response_text = final_text
+            yield {"event": "token", "data": {"token": final_text}}
+            yield {"event": "metadata", "data": {
+                "response_text": response_text,
+                "data_was_saved": data_was_saved,
+            }}
+            return
+
+        for tc in tool_calls:
+            tool_name = _get_tool_name(tc)
+            if tool_name != "update_form_state":
+                messages.append({
+                    "role": "tool",
+                    "tool_name": tool_name,
+                    "content": json.dumps({"ok": False, "error": f"Unknown tool: {tool_name}"}),
+                })
+                continue
+
+            extracted = _parse_tool_args(tc)
+            result = apply_tool_call(session.session_id, blueprint, extracted)
+            if result.get("updated_fields"):
+                data_was_saved = True
+
+            messages.append({
+                "role": "tool",
+                "tool_name": "update_form_state",
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+            update_session_state(
+                session,
+                message={
+                    "role": "tool",
+                    "content": _summarize_tool_result(result),
+                },
+            )
+
+        current_ctx = prepare_turn(session.session_id, blueprint)
+
+        if messages and messages[0]["role"] == "system":
+            messages[0]["content"] = current_ctx.system_prompt
+
+    raise HTTPException(
+        status_code=502,
+        detail="The assistant exceeded the maximum number of tool-call rounds.",
     )
 
 
@@ -229,34 +272,13 @@ async def run_dynamic_blueprint_turn(
     )
 
 
-# ---------------------------------------------------------------------------
-# Agentic tool-call loop
-# ---------------------------------------------------------------------------
-
-_MAX_TOOL_ROUNDS = 8  # guard against infinite loops
-
-
 async def _run_dynamic_turn(
     session: SessionState,
     blueprint: Blueprint,
     user_content: list[dict[str, Any]],
-    ctx: "Any",  # FormEngineContext — avoid circular import annotation
+    ctx: Any,
 ) -> tuple[str, bool]:
-    """
-    Run the LLM in a loop, executing ``update_form_state`` tool calls until
-    the model produces a final text response.
-
-    Each iteration:
-      - Calls Ollama with the current message list and the dynamic tool.
-      - If the model issues a tool call, executes it, re-evaluates state,
-        rebuilds the prompt/tool, and continues.
-      - If the model returns plain text, ends the loop.
-    """
-    # Build initial message list
     messages = _build_messages(session, ctx, user_content)
-
-    # Keep track of the current tool definition (may change each round
-    # as fields get filled and the available set shrinks)
     current_ctx = ctx
     data_was_saved = False
 
@@ -276,7 +298,6 @@ async def _run_dynamic_turn(
         assistant_content = _extract_text(message)
         tool_calls = list(message.get("tool_calls") or [])
 
-        # Build assistant payload for message history
         assistant_payload: dict[str, Any] = {"role": "assistant"}
         if assistant_content:
             assistant_payload["content"] = assistant_content
@@ -284,7 +305,6 @@ async def _run_dynamic_turn(
             assistant_payload["tool_calls"] = tool_calls
         messages.append(assistant_payload)
 
-        # No tool call → final answer
         if not tool_calls:
             final_text = assistant_content.strip()
             if not final_text:
@@ -292,11 +312,9 @@ async def _run_dynamic_turn(
             update_session_state(session, message={"role": "assistant", "content": final_text})
             return final_text, data_was_saved
 
-        # Execute each tool call
         for tc in tool_calls:
             tool_name = _get_tool_name(tc)
             if tool_name != "update_form_state":
-                # Safety: ignore unknown tools
                 messages.append({
                     "role": "tool",
                     "tool_name": tool_name,
@@ -321,12 +339,8 @@ async def _run_dynamic_turn(
                 },
             )
 
-        # Rebuild context after each round so the next tool definition
-        # reflects newly filled fields
         current_ctx = prepare_turn(session.session_id, blueprint)
 
-        # Re-inject updated system prompt (rules + state summary) so the model 
-        # sees the latest filled/missing fields immediately.
         if messages and messages[0]["role"] == "system":
             messages[0]["content"] = current_ctx.system_prompt
 
@@ -338,10 +352,9 @@ async def _run_dynamic_turn(
 
 def _build_messages(
     session: SessionState,
-    ctx: "Any",  # FormEngineContext
+    ctx: Any,
     user_content: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Build the full message list for an Ollama call."""
     history = _build_history(session)
     return [
         {"role": "system", "content": ctx.system_prompt},
@@ -351,9 +364,7 @@ def _build_messages(
 
 
 def _build_history(session: SessionState) -> list[dict[str, Any]]:
-    """Return the last N user/assistant/tool messages from session history."""
     raw = session.messages
-    # Drop the trailing user message (it will be added separately)
     if raw and str(raw[-1].get("role") or "").lower() == "user":
         raw = raw[:-1]
     raw = raw[-RECENT_MESSAGE_COUNT:]
@@ -364,7 +375,6 @@ def _build_history(session: SessionState) -> list[dict[str, Any]]:
         if not content:
             continue
         if role == "tool":
-            # Include tool results so the LLM sees its own save-pattern
             result.append({"role": "assistant", "content": f"[I called a tool: {content}]"})
         elif role in {"user", "assistant"}:
             result.append({"role": role, "content": content})
@@ -398,8 +408,6 @@ def _parse_tool_args(tool_call: Any) -> dict[str, Any]:
         fn = tool_call.get("function") or {}
         args = fn.get("arguments")
         if isinstance(args, dict):
-            # The model may place data directly under "arguments" or nest it
-            # under "extracted_data" depending on how it interprets the schema.
             if "extracted_data" in args and isinstance(args["extracted_data"], dict):
                 return args["extracted_data"]
             return args
@@ -431,16 +439,9 @@ def _summarize_tool_result(result: dict[str, Any]) -> str:
 
 def _build_user_visible_response(
     blueprint: Blueprint,
-    ctx: "Any",  # FormEngineContext
+    ctx: Any,
     assistant_text: str,
 ) -> str:
-    """
-    Append a concise, user-visible summary of the collected form data.
-
-    The dynamic engine already tracks `filled_fields`, but many clients only
-    render the `response` string. This keeps the current state visible inside
-    the conversation itself.
-    """
     text = assistant_text.strip()
     summary = _format_filled_fields_summary(blueprint, ctx.filled_fields)
     if not summary:
@@ -463,49 +464,6 @@ def _format_filled_fields_summary(
         label = field_map[key].label if key in field_map else key
         lines.append(f"- {label}: {value}")
     return "\n".join(lines)
-
-
-async def _parse_dynamic_chat_request(
-    request: Request,
-) -> tuple[str | None, Blueprint, str, bool, list[StarletteUploadFile]]:
-    content_type = request.headers.get("content-type", "").lower()
-
-    if "multipart/form-data" in content_type:
-        form = await request.form()
-        session_id = _normalize_optional_string(form.get("session_id"))
-        prompt = _normalize_optional_string(form.get("prompt")) or ""
-        reset = _coerce_bool(form.get("reset"))
-        files = [
-            value
-            for _, value in form.multi_items()
-            if isinstance(value, StarletteUploadFile)
-        ]
-
-        blueprint_json = _normalize_optional_string(form.get("blueprint"))
-        if blueprint_json:
-            try:
-                blueprint = Blueprint.model_validate(json.loads(blueprint_json))
-            except Exception as exc:
-                raise HTTPException(status_code=400, detail="Invalid blueprint payload.") from exc
-            blueprint_repository.save(blueprint)
-            return session_id, blueprint, prompt, reset, files
-
-        blueprint_id = _normalize_optional_string(form.get("blueprint_id"))
-        if not blueprint_id:
-            raise HTTPException(status_code=400, detail="blueprint_id is required for multipart chat.")
-        return session_id, _get_blueprint(blueprint_id), prompt, reset, files
-
-    try:
-        payload = DynamicChatRequest.model_validate(await request.json())
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail="Invalid dynamic chat payload.") from exc
-
-    if payload.blueprint is not None:
-        blueprint_repository.save(payload.blueprint)
-        return payload.session_id, payload.blueprint, payload.prompt.strip(), payload.reset, []
-
-    assert payload.blueprint_id is not None
-    return payload.session_id, _get_blueprint(payload.blueprint_id), payload.prompt.strip(), payload.reset, []
 
 
 def _build_user_content(prompt: str, document_payload: Any, session: SessionState) -> list[dict[str, Any]]:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from fastapi import HTTPException
 from ollama import AsyncClient, ResponseError
@@ -61,6 +61,58 @@ async def ollama_chat_completion(
                 f"model '{OLLAMA_MODEL}' is available."
             ),
         ) from exc
+
+
+async def ollama_chat_completion_stream(
+    messages: list[dict[str, Any]],
+    *,
+    tools: list[dict[str, Any]] | None = None,
+    model: str | None = None,
+    max_tokens: int | None = None,
+    temperature: float | None = None,
+) -> AsyncGenerator[str, None]:
+    payload: dict[str, Any] = {
+        "model": OLLAMA_MODEL,
+        "messages": [_to_ollama_message(message) for message in messages],
+        "think": False,
+        "stream": True,
+        "options": {
+            "num_ctx": OLLAMA_NUM_CTX,
+            "num_predict": max_tokens or MAX_COMPLETION_TOKENS,
+            "temperature": OLLAMA_TEMPERATURE if temperature is None else temperature,
+        },
+    }
+    if model:
+        payload["model"] = model
+    if tools:
+        payload["tools"] = tools
+
+    try:
+        async for part in client.chat(**payload):
+            token = _extract_stream_token(part)
+            if token:
+                yield token
+    except ResponseError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc) or "Ollama returned an error during streaming.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Unable to reach Ollama during streaming. Make sure Ollama is running "
+                f"locally and the model '{OLLAMA_MODEL}' is available."
+            ),
+        ) from exc
+
+
+def _extract_stream_token(part: Any) -> str | None:
+    if isinstance(part, dict):
+        return part.get("content") or None
+    if hasattr(part, "get"):
+        return part.get("content") or None
+    return None
 
 
 def _to_ollama_message(message: dict[str, Any]) -> dict[str, Any]:

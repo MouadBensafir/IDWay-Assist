@@ -17,6 +17,7 @@ Everything is fully generic — the backend never needs to know the domain.
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Any
 
@@ -194,6 +195,25 @@ class BlueprintField(BaseModel):
         default=False,
         description="Tell the AI it may extract this from an uploaded document.",
     )
+    validation_regex: str | None = Field(
+        default=None,
+        description=(
+            "Optional regex pattern to validate the field value against. "
+            "If set, submitted values that do not match the pattern are rejected "
+            "and a validation error is returned to the LLM."
+        ),
+    )
+
+    @field_validator("validation_regex", mode="before")
+    @classmethod
+    def _validate_regex_pattern(cls, v: Any) -> Any:
+        if v is None:
+            return v
+        try:
+            re.compile(str(v))
+        except re.error as exc:
+            raise ValueError(f"Invalid regex pattern: {exc}") from exc
+        return v
 
     @field_validator("data_source", mode="before")
     @classmethod

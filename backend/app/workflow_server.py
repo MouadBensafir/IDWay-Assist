@@ -47,10 +47,18 @@ import json
 from typing import Any
 from uuid import uuid4
 
+from typing import AsyncGenerator
+
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
-from .dynamic_server import run_dynamic_blueprint_turn
+from .service import (
+    _coerce_bool,
+    _normalize_optional_string,
+    run_dynamic_blueprint_turn,
+    run_dynamic_blueprint_turn_stream,
+)
 from .form_engine import init_state, _submission_path
 from .repositories import blueprint_repository, submission_repository
 from .session_store import get_or_create_session
@@ -71,7 +79,7 @@ from .workflow import (
     WorkflowSummary,
     WorkflowStepDetail,
 )
-from .workflow_repository import workflow_repository
+from .repositories import workflow_repository
 from .workflow_session_store import (
     apply_output_mappings,
     delete_workflow_session,
@@ -854,16 +862,171 @@ async def _parse_workflow_chat_request(
     return workflow_session_id, prompt, reset, step_id, []
 
 
-def _normalize_optional_string(value: Any) -> str | None:
-    if value is None:
-        return None
-    cleaned = str(value).strip()
-    return cleaned or None
+# ---------------------------------------------------------------------------
+# Streaming helpers
+# ---------------------------------------------------------------------------
 
 
-def _coerce_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return False
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+async def _sse_stream(
+    workflow_id: str,
+    workflow_session_id: str | None,
+    prompt: str,
+    reset: bool,
+    requested_step_id: str | None,
+    files: list[StarletteUploadFile],
+) -> AsyncGenerator[bytes, None]:
+    wf = _get_workflow(workflow_id)
+    if workflow_session_id and reset:
+        delete_workflow_session(workflow_session_id)
+
+    state = get_or_create_workflow_session(wf, workflow_session_id)
+    if state.workflow_complete:
+        yield _sse_event("done", {
+            "response": "This workflow is already complete.",
+            "workflow_session_id": state.workflow_session_id,
+            "workflow_id": wf.workflow_id,
+            "workflow_title": wf.title,
+            "workflow_complete": True,
+            "model": "workflow-router",
+        })
+        return
+
+    step = _select_actionable_step(wf, state, requested_step_id)
+    if step is None:
+        yield _sse_event("error", {"detail": "No actionable workflow step is available."})
+        return
+
+    chat_session_id = _ensure_step_chat_session(wf, state, step)
+    chat_session = get_or_create_session(chat_session_id, reset=False)
+    blueprint = blueprint_repository.get(step.blueprint_id)
+    if blueprint is None:
+        yield _sse_event("error", {"detail": f"Blueprint '{step.blueprint_id}' not found."})
+        return
+
+    response_text = ""
+    step_completed = False
+    next_step = step
+
+    async for event in run_dynamic_blueprint_turn_stream(
+        session=chat_session,
+        blueprint=blueprint,
+        prompt=prompt,
+        files=files,
+    ):
+        if event["event"] == "token":
+            response_text += event["data"].get("token", "")
+            yield _sse_event("token", {"token": event["data"].get("token", "")})
+        elif event["event"] == "done":
+            refreshed_state = _get_session(state.workflow_session_id, workflow_id)
+            if event["data"].get("completed") and refreshed_state.step_statuses.get(step.step_id) != StepStatus.COMPLETED:
+                filled_fields = _load_step_filled_fields(wf, refreshed_state, step, event["data"].get("filled_fields", {}))
+                available_steps = _complete_step(wf, refreshed_state, step, filled_fields)
+                refreshed_state = _get_session(state.workflow_session_id, workflow_id)
+                step_completed = True
+                next_step = _select_actionable_step(wf, refreshed_state)
+            elif event["data"].get("completed"):
+                refreshed_state = _get_session(state.workflow_session_id, workflow_id)
+                next_step = _select_actionable_step(wf, refreshed_state)
+
+            response_text = event["data"].get("response", response_text)
+            if step_completed:
+                if refreshed_state.workflow_complete:
+                    response_text = f"{response_text}\n\nWorkflow complete."
+                elif next_step is not None:
+                    response_text = f"{response_text}\n\nNext step: {next_step.title}. Continue the conversation to proceed."
+
+            yield _sse_event("done", {
+                "response": response_text,
+                "workflow_session_id": refreshed_state.workflow_session_id,
+                "workflow_id": wf.workflow_id,
+                "workflow_title": wf.title,
+                "model": "qwen3.5",
+                "workflow_complete": refreshed_state.workflow_complete,
+                "current_step_id": step.step_id,
+                "current_step_title": step.title,
+                "current_step_status": refreshed_state.step_statuses.get(step.step_id),
+                "current_chat_session_id": chat_session_id,
+                "step_completed": step_completed,
+                "next_step_id": next_step.step_id if step_completed and next_step is not None else None,
+                "next_step_title": next_step.title if step_completed and next_step is not None else None,
+                "missing_fields": event["data"].get("missing_fields", []),
+                "filled_fields": event["data"].get("filled_fields", {}),
+                "submission_path": event["data"].get("submission_path"),
+                "token_usage": event["data"].get("token_usage", {}),
+            })
+            return
+
+
+def _sse_event(event_type: str, data: dict[str, Any]) -> bytes:
+    body = json.dumps(data, ensure_ascii=False)
+    return f"event: {event_type}\ndata: {body}\n\n".encode("utf-8")
+
+
+@workflow_router.post("/chat/stream")
+async def workflow_chat_auto_stream(request: Request) -> StreamingResponse:
+    workflow_session_id, prompt, reset, requested_step_id, files = await _parse_workflow_chat_request(request)
+
+    if workflow_session_id:
+        state = load_workflow_session(workflow_session_id)
+        if state is None:
+            if reset:
+                async def _empty_stream() -> AsyncGenerator[bytes, None]:
+                    yield _sse_event("done", {"response": "Session reset."})
+                return StreamingResponse(_empty_stream(), media_type="text/event-stream")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow session '{workflow_session_id}' not found.",
+            )
+        return StreamingResponse(
+            _sse_stream(
+                workflow_id=state.workflow_id,
+                workflow_session_id=workflow_session_id,
+                prompt=prompt,
+                reset=reset,
+                requested_step_id=requested_step_id,
+                files=files,
+            ),
+            media_type="text/event-stream",
+        )
+
+    inferred_workflow_id = _infer_workflow_id(prompt)
+    if inferred_workflow_id is None:
+        catalog = _workflow_catalog()
+        titles = ", ".join(item.title for item in catalog)
+        async def _selection_stream() -> AsyncGenerator[bytes, None]:
+            yield _sse_event("done", {
+                "response": f"What service would you like to do? Available services: {titles}.",
+                "available_workflows": [item.model_dump() for item in catalog],
+            })
+        return StreamingResponse(_selection_stream(), media_type="text/event-stream")
+
+    return StreamingResponse(
+        _sse_stream(
+            workflow_id=inferred_workflow_id,
+            workflow_session_id=None,
+            prompt=prompt,
+            reset=reset,
+            requested_step_id=requested_step_id,
+            files=files,
+        ),
+        media_type="text/event-stream",
+    )
+
+
+@workflow_router.post("/{workflow_id}/chat/stream")
+async def workflow_chat_stream(workflow_id: str, request: Request) -> StreamingResponse:
+    workflow_session_id, prompt, reset, requested_step_id, files = await _parse_workflow_chat_request(request)
+    return StreamingResponse(
+        _sse_stream(
+            workflow_id=workflow_id,
+            workflow_session_id=workflow_session_id,
+            prompt=prompt,
+            reset=reset,
+            requested_step_id=requested_step_id,
+            files=files,
+        ),
+        media_type="text/event-stream",
+    )
+
+
+

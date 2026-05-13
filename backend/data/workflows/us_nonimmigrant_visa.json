@@ -10,78 +10,132 @@
       "blueprint_id": "visa_category_selector",
       "depends_on": [],
       "output_mappings": [
-        { "from_field": "full_name",      "to_step_id": "complete_ds160",          "to_field": "full_name" },
-        { "from_field": "full_name",      "to_step_id": "confirm_documents",       "to_field": "full_name" },
-        { "from_field": "nationality",    "to_step_id": "complete_ds160",          "to_field": "nationality" },
-        { "from_field": "visa_type",      "to_step_id": "complete_ds160",          "to_field": "purpose_of_trip" }
-      ]
+        {
+          "from_field": "full_name",
+          "to_step_id": "complete_ds160",
+          "to_field": "full_name"
+        },
+        {
+          "from_field": "full_name",
+          "to_step_id": "confirm_documents",
+          "to_field": "full_name"
+        },
+        {
+          "from_field": "nationality",
+          "to_step_id": "complete_ds160",
+          "to_field": "nationality"
+        },
+        {
+          "from_field": "visa_type",
+          "to_step_id": "complete_ds160",
+          "to_field": "purpose_of_trip"
+        }
+      ],
+      "optional": false
     },
     {
       "step_id": "complete_ds160",
       "title": "2. Complete Form DS-160",
       "description": "Submit the Online Non-Immigrant Visa Application (DS-160) and record the Confirmation Number.",
       "blueprint_id": "ds160_form",
-      "depends_on": ["determine_visa_category"],
+      "depends_on": [
+        "determine_visa_category"
+      ],
       "output_mappings": [
-        { "from_field": "ds160_confirmation_number", "to_step_id": "create_appointment_profile", "to_field": "ds160_confirmation_number" },
-        { "from_field": "ds160_confirmation_number", "to_step_id": "confirm_documents",           "to_field": "ds160_confirmation_number" },
-        { "from_field": "full_name",                 "to_step_id": "create_appointment_profile", "to_field": "full_name" }
-      ]
+        {
+          "from_field": "ds160_confirmation_number",
+          "to_step_id": "create_appointment_profile",
+          "to_field": "ds160_confirmation_number"
+        },
+        {
+          "from_field": "ds160_confirmation_number",
+          "to_step_id": "confirm_documents",
+          "to_field": "ds160_confirmation_number"
+        },
+        {
+          "from_field": "full_name",
+          "to_step_id": "create_appointment_profile",
+          "to_field": "full_name"
+        }
+      ],
+      "optional": false
     },
     {
       "step_id": "create_appointment_profile",
       "title": "3. Create Appointment Profile",
       "description": "Register an account on the region-specific scheduling portal (CGI Federal or AIS) and record your profile credentials.",
       "blueprint_id": "appointment_profile",
-      "depends_on": ["complete_ds160"],
+      "depends_on": [
+        "complete_ds160"
+      ],
       "output_mappings": [
-        { "from_field": "portal_profile_id", "to_step_id": "pay_mrv_fee",    "to_field": "portal_profile_id" }
-      ]
+        {
+          "from_field": "portal_profile_id",
+          "to_step_id": "pay_mrv_fee",
+          "to_field": "portal_profile_id"
+        }
+      ],
+      "optional": false
     },
     {
       "step_id": "pay_mrv_fee",
       "title": "4. Pay MRV Fee",
-      "description": "Complete the non-refundable Machine-Readable Visa (MRV) fee payment.",
+      "description": "Pay the non-refundable Machine Readable Visa (MRV) fee and record the payment receipt number.",
       "blueprint_id": "mrv_fee_payment",
-      "depends_on": ["create_appointment_profile"],
+      "depends_on": [
+        "create_appointment_profile"
+      ],
       "output_mappings": [
-        { "from_field": "payment_receipt_number", "to_step_id": "verify_payment", "to_field": "payment_receipt_number" }
-      ]
-    },
-    {
-      "step_id": "verify_payment",
-      "title": "5. Verify Payment Status",
-      "description": "Confirm that the MRV fee payment receipt has been activated in the scheduling system.",
-      "blueprint_id": "payment_verification",
-      "depends_on": ["pay_mrv_fee"],
-      "output_mappings": []
+        {
+          "from_field": "payment_receipt_number",
+          "to_step_id": "schedule_biometrics",
+          "to_field": "payment_receipt_number"
+        }
+      ],
+      "optional": false
     },
     {
       "step_id": "schedule_biometrics",
-      "title": "6. Schedule Biometrics Appointment",
-      "description": "Book an appointment at the Visa Application Center (VAC) for fingerprints and photograph collection.",
+      "title": "5. Schedule Biometrics Appointment",
+      "description": "Book an appointment at the designated Visa Application Center (VAC) for fingerprinting and photograph.",
       "blueprint_id": "biometrics_appointment",
-      "depends_on": ["verify_payment"],
+      "depends_on": [
+        "pay_mrv_fee"
+      ],
       "output_mappings": [
-        { "from_field": "biometrics_confirmation_number", "to_step_id": "confirm_documents", "to_field": "biometrics_confirmation_number" }
-      ]
+        {
+          "from_field": "biometrics_confirmation_number",
+          "to_step_id": "schedule_interview",
+          "to_field": "biometrics_confirmation_number"
+        }
+      ],
+      "optional": false
     },
     {
       "step_id": "schedule_interview",
-      "title": "7. Schedule Consular Interview",
+      "title": "6. Schedule Consular Interview",
       "description": "Select an available date and time for the formal visa interview at the US Embassy or Consulate.",
       "blueprint_id": "consular_interview",
-      "depends_on": ["schedule_biometrics"],
+      "depends_on": [
+        "schedule_biometrics"
+      ],
       "output_mappings": [
-        { "from_field": "interview_confirmation_number", "to_step_id": "confirm_documents", "to_field": "interview_confirmation_number" }
-      ]
+        {
+          "from_field": "interview_confirmation_number",
+          "to_step_id": "confirm_documents",
+          "to_field": "interview_confirmation_number"
+        }
+      ],
+      "optional": false
     },
     {
       "step_id": "confirm_documents",
-      "title": "8. Generate Confirmation Documents",
+      "title": "7. Generate Confirmation Documents",
       "description": "Download and print the Appointment Confirmation letter and the DS-160 Barcode page required at the interview.",
       "blueprint_id": "confirmation_documents",
-      "depends_on": ["schedule_biometrics", "schedule_interview"],
+      "depends_on": [
+        "schedule_interview"
+      ],
       "output_mappings": [],
       "optional": false
     }
