@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from .config import (
@@ -22,6 +23,7 @@ from .form_engine import fetch_field_options
 from .models import DeleteSessionResponse, PromptRequest, PromptResponse
 from .ollama_client import extract_token_usage, ollama_chat_completion
 from .repositories import blueprint_repository, submission_repository
+from .service import ollama_chat_completion_stream
 from .session_store import (
     SessionState,
     cache_documents,
@@ -134,6 +136,54 @@ async def chat(request: Request) -> PromptResponse:
         completed=session.completed,
         missing_fields=missing_fields,
         token_usage=get_token_usage(session),
+    )
+
+
+@app.post("/chat/stream")
+async def chat_stream(request: Request) -> StreamingResponse:
+    session_id, prompt, reset, files = await parse_chat_request(request)
+    session = get_or_create_session(session_id, reset=reset)
+
+    document_payload = await build_document_payload(files)
+    cache_documents(session, document_payload.vision_parts, document_payload.text_blocks)
+    user_content = build_user_content(prompt, document_payload, session)
+    session_user_summary = build_session_user_summary(prompt, document_payload.filenames)
+    update_session_state(session, message={"role": "user", "content": session_user_summary})
+    messages = build_llm_messages(session=session, user_content=user_content)
+
+    async def _event_stream():
+        assembled = ""
+        try:
+            async for chunk in ollama_chat_completion_stream(messages, temperature=0.1):
+                message = chunk.get("message") or {}
+                delta = str(message.get("content") or "")
+                if not delta:
+                    continue
+                assembled += delta
+                yield f"event: delta\ndata: {json.dumps({'text': delta}, ensure_ascii=False)}\n\n"
+        except HTTPException as exc:
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc.detail)}, ensure_ascii=False)}\n\n"
+            return
+        except Exception as exc:
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc)}, ensure_ascii=False)}\n\n"
+            return
+
+        final_text = assembled.strip()
+        if final_text:
+            update_session_state(session, message={"role": "assistant", "content": final_text})
+        yield (
+            "event: done\n"
+            f"data: {json.dumps({'response': final_text, 'session_id': session.session_id}, ensure_ascii=False)}\n\n"
+        )
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

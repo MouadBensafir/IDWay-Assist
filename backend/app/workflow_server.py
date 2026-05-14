@@ -48,6 +48,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from .dynamic_server import run_dynamic_blueprint_turn
@@ -499,6 +500,42 @@ async def workflow_chat(workflow_id: str, request: Request) -> WorkflowChatRespo
         reset=reset,
         requested_step_id=requested_step_id,
         files=files,
+    )
+
+
+@workflow_router.post("/{workflow_id}/chat/stream")
+async def workflow_chat_stream(workflow_id: str, request: Request) -> StreamingResponse:
+    workflow_session_id, prompt, reset, requested_step_id, files = await _parse_workflow_chat_request(request)
+    response = await _run_workflow_chat(
+        workflow_id=workflow_id,
+        workflow_session_id=workflow_session_id,
+        prompt=prompt,
+        reset=reset,
+        requested_step_id=requested_step_id,
+        files=files,
+    )
+
+    async def _event_stream():
+        text = response.response or ""
+        if text:
+            # Stream text in short chunks so clients can progressively render.
+            words = text.split(" ")
+            for index, word in enumerate(words):
+                chunk = f"{word} " if index < len(words) - 1 else word
+                yield f"event: delta\ndata: {json.dumps({'text': chunk}, ensure_ascii=False)}\n\n"
+        yield (
+            "event: done\n"
+            f"data: {response.model_dump_json()}\n\n"
+        )
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

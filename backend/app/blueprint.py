@@ -256,6 +256,10 @@ class Blueprint(BaseModel):
         ),
         description="Message delivered when the form is complete.",
     )
+    required_documents: list[str] = Field(
+        default_factory=list,
+        description="Optional list of documents expected from the user for this step.",
+    )
 
     @model_validator(mode="after")
     def _validate_depends_on(self) -> "Blueprint":
