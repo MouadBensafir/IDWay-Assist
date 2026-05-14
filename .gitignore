@@ -1,5 +1,7 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
+backend/API.md
+backend/app/__pycache__/repositories.cpython-314.pyc
+backend/app/repositories.py
 # dependencies
 node_modules/
 

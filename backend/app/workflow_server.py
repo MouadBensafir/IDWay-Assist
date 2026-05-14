@@ -953,6 +953,11 @@ async def _sse_stream(
                 "filled_fields": event["data"].get("filled_fields", {}),
                 "submission_path": event["data"].get("submission_path"),
                 "token_usage": event["data"].get("token_usage", {}),
+                "required_documents": [
+                    str(item).strip()
+                    for item in (getattr(blueprint, "required_documents", None) or [])
+                    if str(item).strip()
+                ],
             })
             return
 
@@ -1027,6 +1032,5 @@ async def workflow_chat_stream(workflow_id: str, request: Request) -> StreamingR
         ),
         media_type="text/event-stream",
     )
-
 
 

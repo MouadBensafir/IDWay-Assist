@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from .config import OLLAMA_MODEL
 from .repositories import submission_repository
@@ -21,7 +22,7 @@ app.add_middleware(
 )
 
 # ── Service Workflow orchestration router ────────────────────────────────────
-from .workflow_server import workflow_router  # noqa: E402
+from .workflow_server import workflow_chat_auto_stream, workflow_router  # noqa: E402
 app.include_router(workflow_router)
 # ────────────────────────────────────────────────────────────────────────────
 
@@ -43,3 +44,8 @@ async def healthcheck() -> dict[str, Any]:
 @app.delete("/sessions/{session_id}")
 async def remove_session(session_id: str) -> dict[str, Any]:
     return {"session_id": session_id, "deleted": delete_session(session_id)}
+
+
+@app.post("/chat/stream")
+async def chat_stream_alias(request: Request) -> StreamingResponse:
+    return await workflow_chat_auto_stream(request)
