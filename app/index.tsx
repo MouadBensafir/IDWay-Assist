@@ -1,3 +1,15 @@
+import Constants from "expo-constants";
+import * as DocumentPicker from "expo-document-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import type { Voice } from "expo-speech";
+import * as Speech from "expo-speech";
+import {
+  ExpoSpeechRecognitionErrorEvent,
+  ExpoSpeechRecognitionModule,
+  ExpoSpeechRecognitionResultEvent,
+  useSpeechRecognitionEvent,
+} from "expo-speech-recognition";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,23 +23,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Constants from "expo-constants";
-import * as DocumentPicker from "expo-document-picker";
-import * as ImageManipulator from "expo-image-manipulator";
-import * as ImagePicker from "expo-image-picker";
-import * as Speech from "expo-speech";
-import type { Voice } from "expo-speech";
-import {
-  ExpoSpeechRecognitionErrorEvent,
-  ExpoSpeechRecognitionModule,
-  ExpoSpeechRecognitionResultEvent,
-  useSpeechRecognitionEvent,
-} from "expo-speech-recognition";
 import appConfig from "../config.json";
 
 const DEFAULT_LOCALE = "en-US";
 const UNSUPPORTED_PLATFORM = Platform.OS === "web";
 const API_URL = getBackendUrl();
+type ChatMode = "workflow" | "main";
+const CHAT_MODE: ChatMode = appConfig.mobile?.chatMode === "main" ? "main" : "workflow";
 
 type Status =
   | "checking"
@@ -375,6 +377,31 @@ export default function MiniTalkie() {
       activeRequestAbortRef.current = abortController;
       resetSpeechQueue();
       setAssistantReply("");
+      streamCompleteRef.current = false;
+
+      if (CHAT_MODE === "main") {
+        const {
+          assistantReply: assistantText,
+          sessionId: nextSessionId,
+          tokenUsage: nextTokenUsage,
+        } = await requestAssistantReplyMain(spokenText, sessionIdRef.current, attachments);
+
+        activeRequestAbortRef.current = null;
+        streamCompleteRef.current = true;
+        if (nextSessionId) {
+          setSessionId(nextSessionId);
+        }
+        setTokenUsage(nextTokenUsage);
+        setAttachments([]);
+        setAssistantReply(assistantText);
+        queueSpeechText(assistantText, true);
+        if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
+          if (continuousConversationRef.current && !manualStopRef.current) {
+            await resumeListeningAfterSpeech();
+          }
+        }
+        return;
+      }
 
       let streamedReply = "";
 
@@ -582,6 +609,36 @@ export default function MiniTalkie() {
       resetSpeechQueue();
       setAssistantReply("");
       activeRequestAbortRef.current = abortController;
+      streamCompleteRef.current = false;
+
+      if (CHAT_MODE === "main") {
+        const {
+          assistantReply: assistantText,
+          sessionId: nextSessionId,
+          tokenUsage: nextTokenUsage,
+        } = await requestAssistantReplyMain(
+          "Please use the attached files to help with my current service request.",
+          sessionIdRef.current,
+          attachments
+        );
+
+        activeRequestAbortRef.current = null;
+        streamCompleteRef.current = true;
+        if (nextSessionId) {
+          setSessionId(nextSessionId);
+        }
+        setTokenUsage(nextTokenUsage);
+        setAttachments([]);
+        setAssistantReply(assistantText);
+        queueSpeechText(assistantText, true);
+        if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
+          if (continuousConversationRef.current && !manualStopRef.current) {
+            await resumeListeningAfterSpeech();
+          }
+        }
+        return;
+      }
+
       let streamedReply = "";
 
       const streamRequest = async () => {
@@ -795,6 +852,9 @@ export default function MiniTalkie() {
   const sendAbortSignal = () => {
     const currentSessionId = sessionIdRef.current.trim();
     if (!currentSessionId) {
+      return;
+    }
+    if (CHAT_MODE !== "workflow") {
       return;
     }
     fetch(`${API_URL}/workflows/chat/abort`, {
@@ -1211,6 +1271,51 @@ async function requestAssistantReply(
   };
 }
 
+async function requestAssistantReplyMain(
+  prompt: string,
+  sessionId?: string,
+  attachments: Attachment[] = []
+) {
+  const requestPrompt = buildPrompt(prompt);
+  const response = attachments.length
+    ? await sendMultipartRequestMain(requestPrompt, sessionId, attachments)
+    : await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: requestPrompt,
+          session_id: sessionId || undefined,
+          reset: false,
+        }),
+      });
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        session_id?: string;
+        response?: string;
+        detail?: string;
+        token_usage?: Partial<TokenUsage>;
+      }
+    | null;
+
+  if (!response.ok) {
+    throw new Error(payload?.detail || "The backend returned an error.");
+  }
+
+  const assistantReply = payload?.response?.trim();
+  if (!assistantReply) {
+    throw new Error("The assistant returned an empty response.");
+  }
+
+  return {
+    assistantReply,
+    sessionId: payload?.session_id?.trim() || "",
+    tokenUsage: normalizeTokenUsage(payload?.token_usage),
+  };
+}
+
 type WorkflowStreamPayload = {
   workflow_session_id?: string;
   session_id?: string;
@@ -1471,6 +1576,32 @@ async function sendMultipartRequest(
   });
 }
 
+async function sendMultipartRequestMain(
+  prompt: string,
+  sessionId: string | undefined,
+  attachments: Attachment[]
+) {
+  const formData = new FormData();
+  formData.append("prompt", prompt);
+
+  if (sessionId?.trim()) {
+    formData.append("session_id", sessionId.trim());
+  }
+
+  attachments.forEach((attachment) => {
+    formData.append("file", {
+      uri: attachment.uri,
+      name: attachment.name,
+      type: attachment.type,
+    } as never);
+  });
+
+  return fetch(`${API_URL}/chat`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
 async function sendMultipartStreamRequest(
   prompt: string,
   sessionId: string | undefined,
@@ -1509,7 +1640,8 @@ async function deleteConversationSession(sessionId: string) {
   }
 
   try {
-    await fetch(`${API_URL}/workflows/sessions/${encodeURIComponent(trimmedSessionId)}`, {
+    const basePath = CHAT_MODE === "workflow" ? "workflows/sessions" : "sessions";
+    await fetch(`${API_URL}/${basePath}/${encodeURIComponent(trimmedSessionId)}`, {
       method: "DELETE",
     });
   } catch {
