@@ -380,14 +380,14 @@ export default function MiniTalkie() {
 
       const streamRequest = async () => {
         try {
-          return await requestAssistantReplyWebSocket(spokenText, sessionIdRef.current, attachments, {
+          return await requestAssistantReplyStream(spokenText, sessionIdRef.current, attachments, {
             signal: abortController.signal,
             onMeta: onMetaHandler,
             onDelta: onDeltaHandler,
             onFinal: onFinalHandler,
           });
         } catch {
-          return requestAssistantReplyStream(spokenText, sessionIdRef.current, attachments, {
+          return await requestAssistantReplyWebSocket(spokenText, sessionIdRef.current, attachments, {
             signal: abortController.signal,
             onMeta: onMetaHandler,
             onDelta: onDeltaHandler,
@@ -1386,8 +1386,21 @@ async function requestAssistantReplyWebSocket(
         } else if (msgEvent === "final") {
           finalPayload = msg as unknown as WorkflowStreamPayload;
           options.onFinal?.(finalPayload);
+          clearTimeout(timeout);
           ws.close();
+          const assistantReply = `${finalPayload.response || streamedReply}`.trim();
+          if (!assistantReply) {
+            reject(new Error("The assistant returned an empty response."));
+          } else {
+            resolve({
+              assistantReply,
+              sessionId:
+                `${finalPayload.workflow_session_id || finalPayload.session_id || ""}`.trim(),
+              tokenUsage: normalizeTokenUsage(finalPayload.token_usage),
+            });
+          }
         } else if (msgEvent === "error") {
+          clearTimeout(timeout);
           ws.close();
           reject(new Error(String(msg.detail || "WebSocket stream failed.")));
         }
@@ -1404,18 +1417,9 @@ async function requestAssistantReplyWebSocket(
     ws.onclose = () => {
       clearTimeout(timeout);
       if (finalPayload) {
-        const assistantReply = `${finalPayload.response || streamedReply}`.trim();
-        if (!assistantReply) {
-          reject(new Error("The assistant returned an empty response."));
-          return;
-        }
-        resolve({
-          assistantReply,
-          sessionId:
-            `${finalPayload.workflow_session_id || finalPayload.session_id || ""}`.trim(),
-          tokenUsage: normalizeTokenUsage(finalPayload.token_usage),
-        });
-      } else if (!streamedReply) {
+        return;
+      }
+      if (!streamedReply) {
         reject(new Error("WebSocket closed without a response."));
       }
     };
@@ -1514,14 +1518,7 @@ async function deleteConversationSession(sessionId: string) {
 }
 
 function buildPrompt(userPrompt: string) {
-  const basePrompt = appConfig.mobile?.basePrompt?.trim();
-  const cleanedUserPrompt = userPrompt.trim();
-
-  if (!basePrompt) {
-    return cleanedUserPrompt;
-  }
-
-  return `${basePrompt}\n\nUser prompt:\n${cleanedUserPrompt}`;
+  return userPrompt.trim();
 }
 
 function parseSseEvent(rawEvent: string) {

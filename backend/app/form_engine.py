@@ -405,10 +405,10 @@ def build_dynamic_system_prompt(
         persona,
         "",
         "## IMPORTANT RULES",
-        "- DOCUMENT-FIRST: Your VERY FIRST response when missing fields exist MUST be to ask "
-        "the user to send a photo of their document (ID card, passport, driving license). "
-        "Only ask questions field-by-field AFTER the user explicitly says they cannot or "
-        "prefer not to send a photo.",
+        "- DOCUMENT-FIRST: Your PRIMARY action on the first turn MUST be to ask the user "
+        "to send a photo of their ID card (or passport for visa services). "
+        "Do NOT ask field-by-field questions yet. Only ask individual fields AFTER "
+        "the user explicitly says they cannot or prefer not to send a document photo.",
         "- IMMEDIATE SAVE: The moment you extract ANY field value — from a document photo OR "
         "from a user answer — call `update_form_state` immediately. Do NOT wait until all "
         "fields are collected. Save partial data right away.",
@@ -435,11 +435,13 @@ def build_dynamic_system_prompt(
 
     # Actionable missing fields
     if actionable:
-        parts.append("### Still needed from the user")
+        parts.append("### Fields that still need to be collected")
         parts.append(
-            "Ask about the fields below. Collect them one at a time unless "
-            "the user volunteers multiple answers at once. "
-            "Never invent or guess values — only save what the user confirms."
+            "Do NOT ask about these fields yet. First ask the user to send a "
+            "document photo (ID card for ID renewal, passport for visa) — "
+            "many of these fields can be extracted from the document. "
+            "Only ask about individual fields AFTER the user explicitly says "
+            "they cannot or prefer not to send a document photo."
         )
         parts.append("")
         for f in actionable:

@@ -9,7 +9,8 @@
       "label": "State of Residence",
       "field_type": "text",
       "required": true,
-      "hint": "Ask which US state issued the current ID or where the user currently lives."
+      "hint": "Ask which US state issued the current ID or where the user currently lives.",
+      "extractable_from_document": true
     },
     {
       "key": "state_authority_name",

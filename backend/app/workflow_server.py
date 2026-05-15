@@ -530,7 +530,11 @@ async def workflow_chat_ws(websocket: WebSocket) -> None:
                     if loaded is not None:
                         inferred_wf_id = loaded.workflow_id
                 if not inferred_wf_id:
-                    inferred_wf_id = _infer_workflow_id(prompt) or "us_nonimmigrant_visa"
+                    inferred_wf_id = _infer_workflow_id(prompt)
+                    if inferred_wf_id is None:
+                        sel = _selection_prompt_response()
+                        await websocket.send_json({"event": "final", **sel.model_dump(mode="json")})
+                        continue
 
                 response = await _run_workflow_chat_stream(
                     workflow_id=inferred_wf_id,
