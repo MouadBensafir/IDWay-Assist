@@ -24,8 +24,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useConversationHistory } from "./context/ConversationContext";
 import appConfig from "../config.json";
+import { useConversationHistory } from "./context/ConversationContext";
 
 const DEFAULT_LOCALE = "en-US";
 const UNSUPPORTED_PLATFORM = Platform.OS === "web";

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ConversationProvider } from "./context/ConversationContext";
@@ -23,8 +24,24 @@ export default function RootLayout() {
             },
           }}
         >
-          <Tabs.Screen name="index" options={{ title: "Home" }} />
-          <Tabs.Screen name="conversation" options={{ title: "Conversation" }} />
+          <Tabs.Screen
+            name="index"
+            options={{
+              title: "Home",
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="home-outline" size={size} color={color} />
+              ),
+            }}
+          />
+          <Tabs.Screen
+            name="conversation"
+            options={{
+              title: "Conversation",
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="chatbubbles-outline" size={size} color={color} />
+              ),
+            }}
+          />
         </Tabs>
       </ConversationProvider>
     </SafeAreaProvider>
