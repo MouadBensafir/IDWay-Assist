@@ -29,7 +29,10 @@ const DEFAULT_LOCALE = "en-US";
 const UNSUPPORTED_PLATFORM = Platform.OS === "web";
 const API_URL = getBackendUrl();
 type ChatMode = "workflow" | "main";
-const CHAT_MODE: ChatMode = appConfig.mobile?.chatMode === "main" ? "main" : "workflow";
+const CHAT_MODE: ChatMode =
+  (appConfig as { mobile?: { chatMode?: string } }).mobile?.chatMode === "main"
+    ? "main"
+    : "workflow";
 
 type Status =
   | "checking"
@@ -747,6 +750,11 @@ export default function MiniTalkie() {
   const voiceLabel = selectedVoice
     ? `${selectedVoice.name} (${selectedVoice.quality})`
     : "System default";
+  const hasSession = Boolean(sessionId.trim());
+  const trustStatus = hasSession ? "Verified" : "Not Verified";
+  const trustToneStyle = hasSession ? styles.statusPillSuccess : styles.statusPillAlert;
+  const trustDotStyle = hasSession ? styles.statusDotSuccess : styles.statusDotAlert;
+  const attachmentsStatus = attachments.length ? "Ready" : "None";
 
   const resetSpeechQueue = () => {
     speechQueueRef.current = [];
@@ -875,129 +883,261 @@ export default function MiniTalkie() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.container}>
-          <View style={styles.controlsCard}>
-            <Text style={styles.sectionLabel}>Speech Settings</Text>
-            <SelectorField
-              label="Language"
-              value={languageLabel}
-              disabled={languageOptions.length === 0}
-              onPress={() => setActiveSelector("language")}
-            />
-            <SelectorField
-              label="Voice"
-              value={voiceLabel}
-              disabled={voiceSelectorDisabled}
-              onPress={() => setActiveSelector("voice")}
-            />
-            <Pressable
-              accessibilityRole="button"
-              disabled={!sessionId}
-              onPress={() => void handleResetConversation()}
-              style={({ pressed }) => [
-                styles.resetButton,
-                !sessionId ? styles.resetButtonDisabled : null,
-                pressed && sessionId ? styles.resetButtonPressed : null,
-              ]}
-            >
-              <Text style={styles.resetButtonText}>End Conversation</Text>
-            </Pressable>
-            <View style={styles.metaPanel}>
-              <Text style={styles.metaLabel}>Session</Text>
-              <Text style={styles.metaValue}>
-                {sessionId.trim() || "No active session"}
-              </Text>
-              <Text style={styles.metaLabel}>Tokens Used</Text>
-              <Text style={styles.metaValue}>
-                {formatTokenUsage(tokenUsage)}
-              </Text>
-            </View>
-            <View style={styles.uploadActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handleTakePhoto()}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Take Photo</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void handlePickFiles()}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Upload File</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              disabled={!attachments.length || uploadBusy}
-              onPress={() => void handleSendAttachments()}
-              style={({ pressed }) => [
-                styles.uploadSendButton,
-                !attachments.length || uploadBusy ? styles.resetButtonDisabled : null,
-                pressed && attachments.length && !uploadBusy ? styles.resetButtonPressed : null,
-              ]}
-            >
-              <Text style={styles.uploadSendButtonText}>
-                {uploadBusy ? "Sending..." : "Send Attached Files"}
-              </Text>
-            </Pressable>
-            {attachments.length ? (
-              <View style={styles.attachmentList}>
-                {attachments.map((attachment, index) => (
-                  <Pressable
-                    key={`${attachment.name}-${attachment.uri}`}
-                    onPress={() => handleRemoveAttachment(index)}
-                    style={({ pressed }) => [
-                      styles.attachmentChip,
-                      pressed ? styles.attachmentChipPressed : null,
-                    ]}
-                  >
-                    <Text style={styles.attachmentChipText}>{attachment.name}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.transcriptCard}>
-            <Text style={styles.sectionLabel}>{panelLabel}</Text>
-            <ScrollView
-              style={styles.panelScroll}
-              contentContainerStyle={styles.panelScrollContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={displayReply}
-            >
-              {displayReply ? (
-                <Animated.Text style={[styles.replyText, { opacity: fadeAnim }]}>
-                  {panelText}
-                </Animated.Text>
-              ) : (
-                <Text style={styles.transcriptText}>{panelText}</Text>
-              )}
-            </ScrollView>
-          </View>
-
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-          <View style={styles.stateContainer}>
-            {status === "checking" || status === "processing" ? (
-              <ActivityIndicator size="large" color="#0f3d91" />
-            ) : null}
-            <Text style={styles.stateMessage}>{getStatusMessage(status)}</Text>
-          </View>
+      <View style={styles.screen}>
+        <View style={styles.backgroundLayer}>
+          <View style={styles.glowTop} />
+          <View style={styles.glowBottom} />
+          <View style={styles.salamanderMark} />
         </View>
-      </ScrollView>
+
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.container}>
+            <View style={styles.headerRow}>
+              <View style={styles.brandStack}>
+                <View style={styles.brandMark}>
+                  <Text style={styles.brandMarkText}>ID</Text>
+                </View>
+                <View>
+                  <Text style={styles.brandTitle}>IDWay Gemini</Text>
+                  <Text style={styles.brandSubtitle}>Speech-to-Speech Console</Text>
+                </View>
+              </View>
+              <View style={[styles.statusPill, trustToneStyle]}>
+                <View style={[styles.statusDot, trustDotStyle]} />
+                <Text style={styles.statusPillText}>{trustStatus}</Text>
+              </View>
+            </View>
+
+            <View style={styles.voiceOrbCard}>
+              <View style={styles.voiceOrbOuter}>
+                <View style={styles.voiceOrbMiddle}>
+                  <View style={styles.voiceOrbInner} />
+                </View>
+              </View>
+              <View style={styles.voiceOrbText}>
+                <Text style={styles.voiceOrbLabel}>Live Trust Channel</Text>
+                <Text style={styles.voiceOrbStatus}>{getStatusMessage(status)}</Text>
+                <Text style={styles.voiceOrbHint}>Zero-trust audio link secured</Text>
+              </View>
+            </View>
+
+            <View style={styles.transcriptCard}>
+              <View style={styles.transcriptHeader}>
+                <Text style={styles.sectionLabel}>{panelLabel}</Text>
+                <View style={styles.securityBadge}>
+                  <Text style={styles.securityBadgeText}>PKI VERIFIED</Text>
+                </View>
+              </View>
+              <ScrollView
+                style={styles.panelScroll}
+                contentContainerStyle={styles.panelScrollContent}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={displayReply}
+              >
+                {displayReply ? (
+                  <Animated.Text style={[styles.replyText, { opacity: fadeAnim }]}>
+                    {panelText}
+                  </Animated.Text>
+                ) : (
+                  <Text style={styles.transcriptText}>{panelText}</Text>
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={styles.identityCard}>
+              <Text style={styles.sectionLabel}>Identity Dashboard</Text>
+              <View style={styles.identityRow}>
+                <View>
+                  <Text style={styles.identityTitle}>Digital State Spine</Text>
+                  <Text style={styles.identitySubtitle}>Active credentials linked</Text>
+                </View>
+                <Text style={styles.identityStatus}>{trustStatus}</Text>
+              </View>
+              <View style={styles.identityGrid}>
+                <View style={styles.identityChip}>
+                  <Text style={styles.identityChipLabel}>ePassport</Text>
+                  <Text style={styles.identityChipValue}>Verified</Text>
+                </View>
+                <View style={styles.identityChip}>
+                  <Text style={styles.identityChipLabel}>Session</Text>
+                  <Text style={styles.identityChipValue}>
+                    {hasSession ? "Active" : "Idle"}
+                  </Text>
+                </View>
+                <View style={styles.identityChip}>
+                  <Text style={styles.identityChipLabel}>Documents</Text>
+                  <Text style={styles.identityChipValue}>{attachmentsStatus}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.flowCard}>
+              <View style={styles.flowHeader}>
+                <Text style={styles.sectionLabel}>Verification Flow</Text>
+                <Text style={styles.flowStatus}>{attachmentsStatus}</Text>
+              </View>
+              <Text style={styles.flowTitle}>Phygital Scan Guide</Text>
+              <Text style={styles.flowSubtitle}>
+                Align the passport chip zone and rotate to reveal the DID hologram.
+              </Text>
+              <View style={styles.scanFrame}>
+                <View style={styles.scanCornerLeft} />
+                <View style={styles.scanCornerRight} />
+                <View style={styles.scanLine} />
+                <Text style={styles.scanLabel}>2D-DOC / ePassport</Text>
+              </View>
+            </View>
+
+            <View style={styles.controlsCard}>
+              <Text style={styles.sectionLabel}>Speech Settings</Text>
+              <SelectorField
+                label="Language"
+                value={languageLabel}
+                disabled={languageOptions.length === 0}
+                onPress={() => setActiveSelector("language")}
+              />
+              <SelectorField
+                label="Voice"
+                value={voiceLabel}
+                disabled={voiceSelectorDisabled}
+                onPress={() => setActiveSelector("voice")}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={!sessionId}
+                onPress={() => void handleResetConversation()}
+                style={({ pressed }) => [
+                  styles.resetButton,
+                  !sessionId ? styles.resetButtonDisabled : null,
+                  pressed && sessionId ? styles.resetButtonPressed : null,
+                ]}
+              >
+                <Text style={styles.resetButtonText}>End Conversation</Text>
+              </Pressable>
+              <View style={styles.metaPanel}>
+                <Text style={styles.metaLabel}>Session</Text>
+                <Text style={styles.metaValue}>
+                  {sessionId.trim() || "No active session"}
+                </Text>
+                <Text style={styles.metaLabel}>Tokens Used</Text>
+                <Text style={styles.metaValue}>
+                  {formatTokenUsage(tokenUsage)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.actionCard}>
+              <Text style={styles.sectionLabel}>Secure Capture</Text>
+              <View style={styles.uploadActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void handleTakePhoto()}
+                  style={({ pressed }) => [
+                    styles.secondaryButton,
+                    pressed ? styles.secondaryButtonPressed : null,
+                  ]}
+                >
+                  <Text style={styles.secondaryButtonText}>Scan Document</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void handlePickFiles()}
+                  style={({ pressed }) => [
+                    styles.secondaryButton,
+                    pressed ? styles.secondaryButtonPressed : null,
+                  ]}
+                >
+                  <Text style={styles.secondaryButtonText}>Upload File</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!attachments.length || uploadBusy}
+                onPress={() => void handleSendAttachments()}
+                style={({ pressed }) => [
+                  styles.uploadSendButton,
+                  !attachments.length || uploadBusy ? styles.resetButtonDisabled : null,
+                  pressed && attachments.length && !uploadBusy ? styles.resetButtonPressed : null,
+                ]}
+              >
+                <Text style={styles.uploadSendButtonText}>
+                  {uploadBusy ? "Sending..." : "Send Attached Files"}
+                </Text>
+              </Pressable>
+              {attachments.length ? (
+                <View style={styles.attachmentList}>
+                  {attachments.map((attachment, index) => (
+                    <Pressable
+                      key={`${attachment.name}-${attachment.uri}`}
+                      onPress={() => handleRemoveAttachment(index)}
+                      style={({ pressed }) => [
+                        styles.attachmentChip,
+                        pressed ? styles.attachmentChipPressed : null,
+                      ]}
+                    >
+                      <Text style={styles.attachmentChipText}>{attachment.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.mfaCard}>
+              <Text style={styles.sectionLabel}>Multi-Factor Trust</Text>
+              <Text style={styles.mfaTitle}>Biometric Authentication</Text>
+              <Text style={styles.mfaSubtitle}>Confirm with face or fingerprint scan.</Text>
+              <View style={styles.mfaRow}>
+                <View style={styles.mfaChip}>
+                  <Text style={styles.mfaChipTitle}>Face ID</Text>
+                  <Text style={styles.mfaChipStatus}>Ready</Text>
+                </View>
+                <View style={styles.mfaChip}>
+                  <Text style={styles.mfaChipTitle}>Fingerprint</Text>
+                  <Text style={styles.mfaChipStatus}>Ready</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.binaryResultCard}>
+              <View style={[styles.binaryResultInner, hasSession ? styles.binaryResultSuccess : styles.binaryResultAlert]}>
+                <Text style={styles.binaryResultLabel}>Binary Result</Text>
+                <Text style={styles.binaryResultValue}>{trustStatus}</Text>
+              </View>
+            </View>
+
+            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+            <View style={styles.stateContainer}>
+              {status === "checking" || status === "processing" ? (
+                <ActivityIndicator size="large" color="#6dd6ff" />
+              ) : null}
+              <Text style={styles.stateMessage}>{getStatusMessage(status)}</Text>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.bottomNav}>
+          <Pressable accessibilityRole="button" style={styles.navItem}>
+            <View style={styles.navIcon} />
+            <Text style={styles.navLabel}>Home</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={styles.navItem}>
+            <View style={styles.navIcon} />
+            <Text style={styles.navLabel}>Documents</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={styles.navItem}>
+            <View style={styles.navIcon} />
+            <Text style={styles.navLabel}>Security</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={styles.navItem}>
+            <View style={styles.navIcon} />
+            <Text style={styles.navLabel}>History</Text>
+          </Pressable>
+        </View>
+      </View>
 
       <SelectionModal
         title="Choose language"
@@ -1812,44 +1952,424 @@ function getWebSocketUrl() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#eef3fb",
+    backgroundColor: "#050b16",
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: "#050b16",
+  },
+  backgroundLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  glowTop: {
+    position: "absolute",
+    top: -120,
+    left: -60,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(109, 214, 255, 0.15)",
+  },
+  glowBottom: {
+    position: "absolute",
+    right: -120,
+    bottom: -140,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: "rgba(16, 45, 92, 0.45)",
+  },
+  salamanderMark: {
+    position: "absolute",
+    top: 140,
+    right: 26,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.2)",
+    backgroundColor: "rgba(10, 31, 68, 0.35)",
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 120,
   },
   container: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    justifyContent: "center",
-    gap: 16,
-    backgroundColor: "#eef3fb",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    gap: 18,
     flexGrow: 1,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  brandStack: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  brandMark: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#0d2552",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  brandMarkText: {
+    color: "#f5f7fb",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  brandTitle: {
+    color: "#f5f7fb",
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  brandSubtitle: {
+    color: "#9fb0c8",
+    fontSize: 12,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+  },
+  statusPillSuccess: {
+    backgroundColor: "rgba(33, 192, 107, 0.15)",
+    borderColor: "rgba(33, 192, 107, 0.35)",
+  },
+  statusPillAlert: {
+    backgroundColor: "rgba(227, 65, 77, 0.14)",
+    borderColor: "rgba(227, 65, 77, 0.3)",
+  },
+  statusPillText: {
+    color: "#f5f7fb",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusDotSuccess: {
+    backgroundColor: "#21c06b",
+  },
+  statusDotAlert: {
+    backgroundColor: "#e3414d",
+  },
+  voiceOrbCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: "rgba(10, 31, 68, 0.7)",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.18)",
+  },
+  voiceOrbOuter: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voiceOrbMiddle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voiceOrbInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(109, 214, 255, 0.6)",
+  },
+  voiceOrbText: {
+    flex: 1,
+    gap: 4,
+  },
+  voiceOrbLabel: {
+    color: "#9fb0c8",
+    fontSize: 11,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+    fontWeight: "700",
+  },
+  voiceOrbStatus: {
+    color: "#f5f7fb",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  voiceOrbHint: {
+    color: "#6f88ab",
+    fontSize: 12,
   },
   controlsCard: {
     padding: 18,
     borderRadius: 22,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#0a1f44",
     borderWidth: 1,
-    borderColor: "#c7d4eb",
+    borderColor: "rgba(109, 214, 255, 0.15)",
     gap: 12,
-    shadowColor: "#0f3d91",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
   },
   transcriptCard: {
-    height: 220,
+    minHeight: 220,
+    padding: 20,
+    borderRadius: 22,
+    backgroundColor: "#0a1f44",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.2)",
+    gap: 12,
+  },
+  transcriptHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  securityBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(109, 214, 255, 0.2)",
+  },
+  securityBadgeText: {
+    color: "#bfe9ff",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.7,
+  },
+  identityCard: {
     padding: 18,
     borderRadius: 22,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#0a1f44",
     borderWidth: 1,
-    borderColor: "#c7d4eb",
-    shadowColor: "#0f3d91",
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 3,
+    borderColor: "rgba(109, 214, 255, 0.16)",
+    gap: 12,
+  },
+  identityRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  identityTitle: {
+    color: "#f5f7fb",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  identitySubtitle: {
+    color: "#7f96b6",
+    fontSize: 12,
+  },
+  identityStatus: {
+    color: "#21c06b",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  identityGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  identityChip: {
+    flexBasis: "48%",
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(197, 203, 213, 0.2)",
+  },
+  identityChipLabel: {
+    color: "#9fb0c8",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  identityChipValue: {
+    color: "#f5f7fb",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+  flowCard: {
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: "#0a1f44",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.12)",
+    gap: 12,
+  },
+  flowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  flowStatus: {
+    color: "#9fb0c8",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  flowTitle: {
+    color: "#f5f7fb",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  flowSubtitle: {
+    color: "#7f96b6",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  scanFrame: {
+    height: 140,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    overflow: "hidden",
+  },
+  scanCornerLeft: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    width: 18,
+    height: 18,
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderColor: "#6dd6ff",
+  },
+  scanCornerRight: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    width: 18,
+    height: 18,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: "#6dd6ff",
+  },
+  scanLine: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    right: 20,
+    height: 2,
+    backgroundColor: "rgba(109, 214, 255, 0.45)",
+  },
+  scanLabel: {
+    color: "#bfe9ff",
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  actionCard: {
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: "#0a1f44",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.14)",
+    gap: 12,
+  },
+  mfaCard: {
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: "#0a1f44",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.18)",
+    gap: 10,
+  },
+  mfaTitle: {
+    color: "#f5f7fb",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  mfaSubtitle: {
+    color: "#7f96b6",
+    fontSize: 12,
+  },
+  mfaRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  mfaChip: {
+    flex: 1,
+    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(197, 203, 213, 0.18)",
+  },
+  mfaChipTitle: {
+    color: "#9fb0c8",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  mfaChipStatus: {
+    color: "#f5f7fb",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+  binaryResultCard: {
+    borderRadius: 24,
+    overflow: "hidden",
+  },
+  binaryResultInner: {
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+  },
+  binaryResultSuccess: {
+    backgroundColor: "#1d6f4a",
+  },
+  binaryResultAlert: {
+    backgroundColor: "#7a1f2c",
+  },
+  binaryResultLabel: {
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  binaryResultValue: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 6,
   },
   panelScroll: {
     flex: 1,
@@ -1858,27 +2378,27 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   sectionLabel: {
-    color: "#0f3d91",
+    color: "#9fb0c8",
     fontSize: 11,
     fontWeight: "700",
-    letterSpacing: 0.8,
+    letterSpacing: 1.1,
     textTransform: "uppercase",
     marginBottom: 8,
   },
   transcriptText: {
-    color: "#10284c",
-    fontSize: 17,
+    color: "#f5f7fb",
+    fontSize: 16,
     lineHeight: 24,
-    fontWeight: "600",
+    fontWeight: "500",
   },
   replyText: {
-    color: "#10284c",
+    color: "#f5f7fb",
     fontSize: 16,
     lineHeight: 23,
     fontWeight: "500",
   },
   errorText: {
-    color: "#c9163a",
+    color: "#ff6b6b",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -1886,7 +2406,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   selectorLabel: {
-    color: "#1c3f78",
+    color: "#b8c7de",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -1894,8 +2414,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#b9cae6",
-    backgroundColor: "#f7faff",
+    borderColor: "rgba(197, 203, 213, 0.25)",
+    backgroundColor: "rgba(5, 14, 30, 0.6)",
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: "row",
@@ -1911,13 +2431,13 @@ const styles = StyleSheet.create({
   },
   selectorValue: {
     flex: 1,
-    color: "#10284c",
+    color: "#f5f7fb",
     fontSize: 14,
     lineHeight: 20,
     fontWeight: "600",
   },
   selectorChevron: {
-    color: "#0f3d91",
+    color: "#6dd6ff",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
@@ -1927,8 +2447,8 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#b9cae6",
-    backgroundColor: "#edf4ff",
+    borderColor: "rgba(197, 203, 213, 0.3)",
+    backgroundColor: "rgba(109, 214, 255, 0.1)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
@@ -1940,7 +2460,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   resetButtonText: {
-    color: "#0f3d91",
+    color: "#bfe9ff",
     fontSize: 13,
     fontWeight: "800",
     textTransform: "uppercase",
@@ -1949,14 +2469,14 @@ const styles = StyleSheet.create({
   metaPanel: {
     gap: 4,
     borderWidth: 1,
-    borderColor: "#c7d4eb",
+    borderColor: "rgba(197, 203, 213, 0.2)",
     borderRadius: 16,
-    backgroundColor: "#f7faff",
+    backgroundColor: "rgba(5, 14, 30, 0.6)",
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   metaLabel: {
-    color: "#58739a",
+    color: "#8ea6c3",
     fontSize: 11,
     fontWeight: "700",
     textTransform: "uppercase",
@@ -1964,7 +2484,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   metaValue: {
-    color: "#10284c",
+    color: "#f5f7fb",
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
@@ -1978,8 +2498,8 @@ const styles = StyleSheet.create({
     minHeight: 42,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#b9cae6",
-    backgroundColor: "#f4f8ff",
+    borderColor: "rgba(197, 203, 213, 0.3)",
+    backgroundColor: "rgba(5, 14, 30, 0.6)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
@@ -1988,7 +2508,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.99 }],
   },
   secondaryButtonText: {
-    color: "#0f3d91",
+    color: "#bfe9ff",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
@@ -1997,13 +2517,13 @@ const styles = StyleSheet.create({
   uploadSendButton: {
     minHeight: 42,
     borderRadius: 14,
-    backgroundColor: "#0f3d91",
+    backgroundColor: "#6dd6ff",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
   uploadSendButtonText: {
-    color: "#ffffff",
+    color: "#0a1f44",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
@@ -2016,7 +2536,7 @@ const styles = StyleSheet.create({
   },
   attachmentChip: {
     borderRadius: 999,
-    backgroundColor: "#e3edfb",
+    backgroundColor: "rgba(109, 214, 255, 0.15)",
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -2024,7 +2544,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   attachmentChipText: {
-    color: "#163867",
+    color: "#bfe9ff",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -2035,7 +2555,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   stateMessage: {
-    color: "#0f3d91",
+    color: "#bfe9ff",
     fontSize: 20,
     fontWeight: "700",
     textAlign: "center",
@@ -2043,7 +2563,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(8, 32, 84, 0.35)",
+    backgroundColor: "rgba(5, 11, 22, 0.6)",
     justifyContent: "flex-end",
   },
   modalDismissArea: {
@@ -2051,7 +2571,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     maxHeight: "70%",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#0a1f44",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -2060,7 +2580,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   modalTitle: {
-    color: "#0f3d91",
+    color: "#f5f7fb",
     fontSize: 18,
     fontWeight: "800",
   },
@@ -2075,13 +2595,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   modalOptionSelected: {
-    backgroundColor: "#e7f0ff",
+    backgroundColor: "rgba(109, 214, 255, 0.2)",
   },
   modalOptionPressed: {
     opacity: 0.8,
   },
   modalOptionText: {
-    color: "#10284c",
+    color: "#f5f7fb",
     fontSize: 15,
     lineHeight: 21,
     fontWeight: "500",
@@ -2092,13 +2612,45 @@ const styles = StyleSheet.create({
   modalCloseButton: {
     minHeight: 48,
     borderRadius: 16,
-    backgroundColor: "#0f3d91",
+    backgroundColor: "#6dd6ff",
     alignItems: "center",
     justifyContent: "center",
   },
   modalCloseText: {
-    color: "#ffffff",
+    color: "#0a1f44",
     fontSize: 14,
     fontWeight: "800",
+  },
+  bottomNav: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    bottom: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    backgroundColor: "rgba(10, 31, 68, 0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.2)",
+  },
+  navItem: {
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+  },
+  navIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: "rgba(109, 214, 255, 0.6)",
+  },
+  navLabel: {
+    color: "#bfe9ff",
+    fontSize: 10,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    fontWeight: "700",
   },
 });
