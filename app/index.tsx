@@ -24,6 +24,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useConversationHistory } from "./context/ConversationContext";
 import appConfig from "../config.json";
 
 const DEFAULT_LOCALE = "en-US";
@@ -65,6 +66,7 @@ const EMPTY_TOKEN_USAGE: TokenUsage = {
 };
 
 export default function MiniTalkie() {
+  const { addAssistantMessage, addUserMessage } = useConversationHistory();
   const [status, setStatus] = useState<Status>(
     UNSUPPORTED_PLATFORM ? "error" : "checking"
   );
@@ -99,6 +101,7 @@ export default function MiniTalkie() {
   const isBargeInProgressRef = useRef(false);
   const latestTranscriptRef = useRef("");
   const aecAvailableRef = useRef(false);
+  const lastNetworkRestartRef = useRef(0);
   const barScales = useRef(
     Array.from({ length: WAVE_BAR_COUNT }, () => new Animated.Value(0.2))
   ).current;
@@ -158,6 +161,11 @@ export default function MiniTalkie() {
   };
 
   useSpeechRecognitionEvent("result", (event: ExpoSpeechRecognitionResultEvent) => {
+    const currentStatus = statusRef.current;
+    if (currentStatus !== "listening" && currentStatus !== "error") {
+      statusRef.current = "listening";
+      setStatus("listening");
+    }
     const nextTranscript = event.results[0]?.transcript?.trim() ?? "";
 
     if (!nextTranscript) {
@@ -176,13 +184,13 @@ export default function MiniTalkie() {
       setPartialTranscript(nextTranscript);
     }
 
-    if (statusRef.current === "speaking" || statusRef.current === "processing") {
+    if (currentStatus === "speaking" || currentStatus === "processing") {
       finalTranscriptRef.current = "";
       isBargeInProgressRef.current = true;
       sendAbortSignal();
       activeRequestAbortRef.current?.abort();
       activeRequestAbortRef.current = null;
-      if (statusRef.current === "speaking") {
+      if (currentStatus === "speaking") {
         Speech.stop().catch(() => undefined);
       }
       resetSpeechQueue();
@@ -195,8 +203,30 @@ export default function MiniTalkie() {
   });
 
   useSpeechRecognitionEvent("error", (event: ExpoSpeechRecognitionErrorEvent) => {
-    continuousConversationRef.current = false;
     clearSilenceTimer();
+    const errorCode = `${event.error || ""}`.toLowerCase();
+    const errorMessage = `${event.message || ""}`.toLowerCase();
+    const isNetworkError =
+      errorCode.includes("network") ||
+      errorCode.includes("service-unavailable") ||
+      errorMessage.includes("network") ||
+      errorMessage.includes("service") ||
+      errorMessage.includes("unavailable");
+
+    if (isNetworkError && !manualStopRef.current) {
+      const now = Date.now();
+      if (now - lastNetworkRestartRef.current > 1500) {
+        lastNetworkRestartRef.current = now;
+        setErrorMessage("");
+        setStatus("checking");
+        setTimeout(() => {
+          void beginListeningTurn({ automatic: true, preserveAssistantReply: true });
+        }, 400);
+      }
+      return;
+    }
+
+    continuousConversationRef.current = false;
     setStatus("error");
     setErrorMessage(formatRecognitionError(event));
   });
@@ -391,6 +421,7 @@ export default function MiniTalkie() {
       resetSpeechQueue();
       setAssistantReply("");
       streamCompleteRef.current = false;
+      addUserMessage(spokenText);
 
       if (CHAT_MODE === "main") {
         const {
@@ -407,6 +438,7 @@ export default function MiniTalkie() {
         setTokenUsage(nextTokenUsage);
         setAttachments([]);
         setAssistantReply(assistantText);
+        addAssistantMessage(assistantText);
         queueSpeechText(assistantText, true);
         if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
           if (continuousConversationRef.current && !manualStopRef.current) {
@@ -480,6 +512,7 @@ export default function MiniTalkie() {
       setTokenUsage(nextTokenUsage);
       setAttachments([]);
       setAssistantReply(assistantText);
+      addAssistantMessage(assistantText);
       if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
         if (continuousConversationRef.current && !manualStopRef.current) {
           await resumeListeningAfterSpeech();
@@ -625,6 +658,9 @@ export default function MiniTalkie() {
       streamCompleteRef.current = false;
 
       if (CHAT_MODE === "main") {
+        addUserMessage(
+          "Please use the attached files to help with my current service request."
+        );
         const {
           assistantReply: assistantText,
           sessionId: nextSessionId,
@@ -643,6 +679,7 @@ export default function MiniTalkie() {
         setTokenUsage(nextTokenUsage);
         setAttachments([]);
         setAssistantReply(assistantText);
+        addAssistantMessage(assistantText);
         queueSpeechText(assistantText, true);
         if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
           if (continuousConversationRef.current && !manualStopRef.current) {
@@ -653,6 +690,7 @@ export default function MiniTalkie() {
       }
 
       let streamedReply = "";
+      addUserMessage("Please use the attached files to help with my current service request.");
 
       const streamRequest = async () => {
         try {
@@ -727,6 +765,7 @@ export default function MiniTalkie() {
 
       setAttachments([]);
       setAssistantReply(assistantText);
+      addAssistantMessage(assistantText);
       if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
         if (continuousConversationRef.current && !manualStopRef.current) {
           await resumeListeningAfterSpeech();
