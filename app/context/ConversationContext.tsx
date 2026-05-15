@@ -6,11 +6,15 @@ export type ConversationItem = {
   role: "user" | "assistant";
   text: string;
   timestamp: number;
+  attachments?: { name: string; uri?: string; type?: string }[];
 };
 
 type ConversationContextValue = {
   history: ConversationItem[];
-  addUserMessage: (text: string) => void;
+  addUserMessage: (
+    text: string,
+    attachments?: { name: string; uri?: string; type?: string }[]
+  ) => void;
   addAssistantMessage: (text: string) => void;
 };
 
@@ -20,22 +24,30 @@ export function ConversationProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<ConversationItem[]>([]);
   const counterRef = useRef(0);
 
-  const createItem = (role: ConversationItem["role"], text: string) => {
+  const createItem = (
+    role: ConversationItem["role"],
+    text: string,
+    attachments?: { name: string; uri?: string; type?: string }[]
+  ) => {
     counterRef.current += 1;
     return {
       id: `${Date.now()}-${counterRef.current}`,
       role,
       text,
       timestamp: Date.now(),
+      attachments,
     };
   };
 
-  const addUserMessage = (text: string) => {
+  const addUserMessage = (
+    text: string,
+    attachments?: { name: string; uri?: string; type?: string }[]
+  ) => {
     const clean = text.trim();
     if (!clean) {
       return;
     }
-    setHistory((current) => [...current, createItem("user", clean)]);
+    setHistory((current) => [...current, createItem("user", clean, attachments)]);
   };
 
   const addAssistantMessage = (text: string) => {

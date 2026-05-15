@@ -27,6 +27,15 @@ export default function ConversationScreen() {
                 {item.role === "user" ? "You" : "Assistant"}
               </Text>
               <Text style={styles.messageText}>{item.text}</Text>
+              {item.attachments?.length ? (
+                <View style={styles.attachmentRow}>
+                  {item.attachments.map((attachment) => (
+                    <View key={`${item.id}-${attachment.name}`} style={styles.attachmentChip}>
+                      <Text style={styles.attachmentText}>{attachment.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
             </View>
           ))
         )}
@@ -106,5 +115,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: 6,
+  },
+  attachmentRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8,
+  },
+  attachmentChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(109, 214, 255, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.3)",
+  },
+  attachmentText: {
+    color: "#bfe9ff",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

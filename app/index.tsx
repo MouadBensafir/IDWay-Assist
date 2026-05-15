@@ -1,3 +1,4 @@
+import { useIsFocused } from "@react-navigation/native";
 import { Audio } from "expo-av";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
@@ -13,7 +14,6 @@ import {
 } from "expo-speech-recognition";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Modal,
   Platform,
@@ -21,7 +21,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import appConfig from "../config.json";
@@ -66,6 +66,7 @@ const EMPTY_TOKEN_USAGE: TokenUsage = {
 };
 
 export default function MiniTalkie() {
+  const isFocused = useIsFocused();
   const { addAssistantMessage, addUserMessage } = useConversationHistory();
   const [status, setStatus] = useState<Status>(
     UNSUPPORTED_PLATFORM ? "error" : "checking"
@@ -252,6 +253,25 @@ export default function MiniTalkie() {
       ExpoSpeechRecognitionModule.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFocused) {
+      manualStopRef.current = true;
+      clearSilenceTimer();
+      ExpoSpeechRecognitionModule.abort();
+      setStatus("ready");
+      return;
+    }
+
+    if (UNSUPPORTED_PLATFORM) {
+      return;
+    }
+
+    manualStopRef.current = false;
+    if (statusRef.current === "ready" || statusRef.current === "checking") {
+      void beginListeningTurn({ automatic: true, preserveAssistantReply: true });
+    }
+  }, [isFocused]);
 
   const voicesForLanguage = availableVoices.filter(
     (voice) => voice.language === selectedLanguage
@@ -659,7 +679,12 @@ export default function MiniTalkie() {
 
       if (CHAT_MODE === "main") {
         addUserMessage(
-          "Please use the attached files to help with my current service request."
+          "Please use the attached files to help with my current service request.",
+          attachments.map((attachment) => ({
+            name: attachment.name,
+            uri: attachment.uri,
+            type: attachment.type,
+          }))
         );
         const {
           assistantReply: assistantText,
@@ -690,7 +715,14 @@ export default function MiniTalkie() {
       }
 
       let streamedReply = "";
-      addUserMessage("Please use the attached files to help with my current service request.");
+      addUserMessage(
+        "Please use the attached files to help with my current service request.",
+        attachments.map((attachment) => ({
+          name: attachment.name,
+          uri: attachment.uri,
+          type: attachment.type,
+        }))
+      );
 
       const streamRequest = async () => {
         try {
@@ -1153,12 +1185,6 @@ export default function MiniTalkie() {
             </Pressable>
           ) : null}
 
-          <View style={styles.stateContainer}>
-            {status === "checking" || status === "processing" ? (
-              <ActivityIndicator size="large" color="#6dd6ff" />
-            ) : null}
-            <Text style={styles.stateMessage}>{getStatusMessage(status)}</Text>
-          </View>
         </View>
       </ScrollView>
 
@@ -2260,19 +2286,6 @@ const styles = StyleSheet.create({
     color: "#bfe9ff",
     fontSize: 12,
     fontWeight: "700",
-  },
-  stateContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 32,
-    gap: 12,
-  },
-  stateMessage: {
-    color: "#bfe9ff",
-    fontSize: 20,
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 28,
   },
   retryButton: {
     minHeight: 44,
