@@ -1,3 +1,4 @@
+import { Audio } from "expo-av";
 import Constants from "expo-constants";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -28,6 +29,9 @@ import appConfig from "../config.json";
 const DEFAULT_LOCALE = "en-US";
 const UNSUPPORTED_PLATFORM = Platform.OS === "web";
 const API_URL = getBackendUrl();
+const WAVE_BAR_COUNT = 18;
+const WAVE_MIN_SCALE = 0.12;
+const WAVE_MAX_SCALE = 1.05;
 type ChatMode = "workflow" | "main";
 const CHAT_MODE: ChatMode =
   (appConfig as { mobile?: { chatMode?: string } }).mobile?.chatMode === "main"
@@ -95,6 +99,12 @@ export default function MiniTalkie() {
   const isBargeInProgressRef = useRef(false);
   const latestTranscriptRef = useRef("");
   const aecAvailableRef = useRef(false);
+  const barScales = useRef(
+    Array.from({ length: WAVE_BAR_COUNT }, () => new Animated.Value(0.2))
+  ).current;
+  const meterLevelRef = useRef(0);
+  const meterTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -750,61 +760,89 @@ export default function MiniTalkie() {
   const voiceLabel = selectedVoice
     ? `${selectedVoice.name} (${selectedVoice.quality})`
     : "System default";
-  const waveAnim = useRef(new Animated.Value(0)).current;
-  const waveScale = waveAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.6, 1.1],
-  });
-  const waveOpacity = waveAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.35, 0.85],
-  });
+  useEffect(() => {
+    const startMetering = async () => {
+      if (recordingRef.current) {
+        return;
+      }
+      try {
+        const permissions = await Audio.requestPermissionsAsync();
+        if (!permissions.granted) {
+          return;
+        }
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        const recording = new Audio.Recording();
+        recording.setOnRecordingStatusUpdate((statusUpdate: Audio.RecordingStatus) => {
+          if (
+            typeof statusUpdate.metering === "number" &&
+            Number.isFinite(statusUpdate.metering)
+          ) {
+            const normalized = (statusUpdate.metering + 60) / 60;
+            meterLevelRef.current = clamp(normalized, 0, 1);
+          }
+        });
+        recording.setProgressUpdateInterval(120);
+        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.LOW_QUALITY);
+        await recording.startAsync();
+        recordingRef.current = recording;
+      } catch {
+        if (recordingRef.current) {
+          try {
+            await recordingRef.current.stopAndUnloadAsync();
+          } catch {
+            // ignore
+          }
+          recordingRef.current = null;
+        }
+      }
+    };
+
+    const stopMetering = async () => {
+      if (!recordingRef.current) {
+        return;
+      }
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+      } catch {
+        // ignore
+      }
+      recordingRef.current = null;
+    };
+
+    if (status === "listening") {
+      void startMetering();
+    } else {
+      void stopMetering();
+    }
+  }, [status]);
 
   useEffect(() => {
-    let loop: Animated.CompositeAnimation | null = null;
-    if (status === "listening" || status === "processing" || status === "speaking") {
-      waveAnim.setValue(0);
-      loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(waveAnim, {
-            toValue: 1,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-          Animated.timing(waveAnim, {
-            toValue: 0,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      loop.start();
-    } else if (status === "ready" || status === "checking") {
-      waveAnim.setValue(0);
-      loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(waveAnim, {
-            toValue: 1,
-            duration: 1800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(waveAnim, {
-            toValue: 0,
-            duration: 1800,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      loop.start();
-    } else {
-      waveAnim.stopAnimation();
-      waveAnim.setValue(0);
+    if (meterTimerRef.current) {
+      return () => undefined;
     }
 
+    meterTimerRef.current = setInterval(() => {
+      const currentStatus = statusRef.current;
+      const baseLevel = getWaveBaseLevel(currentStatus, meterLevelRef.current);
+      const timestamp = Date.now() / 140;
+      barScales.forEach((bar, index) => {
+        const phase = Math.sin(timestamp + index * 0.6) * 0.25 + 0.75;
+        const jitter = 0.75 + Math.random() * 0.35;
+        const next = clamp(baseLevel * phase * jitter, WAVE_MIN_SCALE, WAVE_MAX_SCALE);
+        bar.setValue(next);
+      });
+    }, 120);
+
     return () => {
-      loop?.stop();
+      if (meterTimerRef.current) {
+        clearInterval(meterTimerRef.current);
+        meterTimerRef.current = null;
+      }
     };
-  }, [status, waveAnim]);
+  }, [barScales]);
 
   const resetSpeechQueue = () => {
     speechQueueRef.current = [];
@@ -1029,16 +1067,18 @@ export default function MiniTalkie() {
           </View>
 
           <View style={styles.waveCard}>
-            <Animated.View
-              style={[
-                styles.waveBar,
-                getWaveStyle(status),
-                {
-                  opacity: waveOpacity,
-                  transform: [{ scaleX: waveScale }],
-                },
-              ]}
-            />
+            <View style={styles.waveRow}>
+              {barScales.map((bar, index) => (
+                <Animated.View
+                  key={`wave-${index}`}
+                  style={[
+                    styles.waveBar,
+                    getWaveStyle(status),
+                    { transform: [{ scaleY: bar }] },
+                  ]}
+                />
+              ))}
+            </View>
           </View>
 
           <View style={styles.transcriptCard}>
@@ -1305,6 +1345,28 @@ function pickVoiceForLanguage(voices: Voice[], language: string) {
 
 function formatLanguageLabel(language: string) {
   return language.replace(/_/g, "-");
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getWaveBaseLevel(status: Status, meterLevel: number) {
+  switch (status) {
+    case "listening":
+      return clamp(0.18 + meterLevel * 0.92, 0.18, 1.1);
+    case "speaking":
+      return 0.7;
+    case "processing":
+      return 0.45;
+    case "ready":
+      return 0.28;
+    case "checking":
+      return 0.22;
+    case "error":
+    default:
+      return 0.15;
+  }
 }
 
 function getStatusMessage(status: Status) {
@@ -1944,7 +2006,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   waveCard: {
-    height: 38,
+    height: 72,
     borderRadius: 16,
     backgroundColor: "rgba(5, 14, 30, 0.7)",
     borderWidth: 1,
@@ -1952,10 +2014,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+  waveRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    height: 46,
+  },
   waveBar: {
-    height: 6,
-    borderRadius: 999,
-    marginHorizontal: 20,
+    width: 6,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: "#6dd6ff",
   },
   waveChecking: {
