@@ -1,0 +1,21 @@
+{
+  "workflow_session_id": "942a16110eaa48ee9f92132cde14c9cc",
+  "workflow_id": "us_state_id_renewal",
+  "step_statuses": {
+    "identify_state_authority": "in_progress",
+    "determine_renewal_method": "locked",
+    "gather_identity_status_documents": "locked",
+    "gather_proof_of_residency": "locked",
+    "complete_application_form": "locked",
+    "schedule_dmv_appointment": "locked",
+    "complete_in_person_processing": "locked",
+    "process_payment": "locked",
+    "obtain_temporary_documentation": "locked"
+  },
+  "step_chat_session_ids": {
+    "identify_state_authority": "32c596b7d2f04a78a67578ff517237e7"
+  },
+  "step_submissions": {},
+  "pre_filled": {},
+  "workflow_complete": false
+}

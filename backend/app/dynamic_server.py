@@ -35,7 +35,7 @@ The router is imported and mounted in server.py via:
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from fastapi import APIRouter, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -50,7 +50,11 @@ from .blueprint import (
 from .config import OLLAMA_MODEL, RECENT_MESSAGE_COUNT
 from .document_utils import build_document_payload
 from .form_engine import _submission_path, apply_tool_call, prepare_turn
-from .ollama_client import extract_token_usage, ollama_chat_completion
+from .ollama_client import (
+    extract_token_usage,
+    ollama_chat_completion,
+    ollama_chat_completion_stream,
+)
 from .repositories import blueprint_repository, submission_repository
 from .session_store import (
     SessionState,
@@ -162,6 +166,7 @@ async def run_dynamic_blueprint_turn(
     prompt: str,
     reset: bool = False,
     files: list[StarletteUploadFile] | None = None,
+    on_text_chunk: Callable[[str], Awaitable[None] | None] | None = None,
 ) -> DynamicChatResponse:
     document_payload = await build_document_payload(files or [])
     cache_documents(session, document_payload.vision_parts, document_payload.text_blocks)
@@ -203,12 +208,21 @@ async def run_dynamic_blueprint_turn(
         message={"role": "user", "content": _build_session_user_summary(user_text, document_payload.filenames)},
     )
 
-    response_text, data_was_saved = await _run_dynamic_turn(
-        session=session,
-        blueprint=blueprint,
-        user_content=user_content,
-        ctx=ctx,
-    )
+    if on_text_chunk is None:
+        response_text, data_was_saved = await _run_dynamic_turn(
+            session=session,
+            blueprint=blueprint,
+            user_content=user_content,
+            ctx=ctx,
+        )
+    else:
+        response_text, data_was_saved = await _run_dynamic_turn_streaming(
+            session=session,
+            blueprint=blueprint,
+            user_content=user_content,
+            ctx=ctx,
+            on_text_chunk=on_text_chunk,
+        )
 
     ctx = prepare_turn(session.session_id, blueprint)
     if ctx.missing_fields and not data_was_saved and user_text.strip():
@@ -327,6 +341,85 @@ async def _run_dynamic_turn(
 
         # Re-inject updated system prompt (rules + state summary) so the model 
         # sees the latest filled/missing fields immediately.
+        if messages and messages[0]["role"] == "system":
+            messages[0]["content"] = current_ctx.system_prompt
+
+    raise HTTPException(
+        status_code=502,
+        detail="The assistant exceeded the maximum number of tool-call rounds.",
+    )
+
+
+async def _run_dynamic_turn_streaming(
+    session: SessionState,
+    blueprint: Blueprint,
+    user_content: list[dict[str, Any]],
+    ctx: "Any",  # FormEngineContext - avoid circular import annotation
+    on_text_chunk: Callable[[str], Awaitable[None] | None],
+) -> tuple[str, bool]:
+    messages = _build_messages(session, ctx, user_content)
+    current_ctx = ctx
+    data_was_saved = False
+
+    for _round in range(_MAX_TOOL_ROUNDS):
+        completion = await ollama_chat_completion_stream(
+            messages,
+            tools=[current_ctx.tool_definition],
+            temperature=0.1,
+            on_text_chunk=on_text_chunk,
+        )
+        usage = extract_token_usage(completion)
+        record_token_usage(
+            session,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+        )
+        message = completion.get("message") or {}
+        assistant_content = _extract_text(message)
+        tool_calls = list(message.get("tool_calls") or [])
+
+        assistant_payload: dict[str, Any] = {"role": "assistant"}
+        if assistant_content:
+            assistant_payload["content"] = assistant_content
+        if tool_calls:
+            assistant_payload["tool_calls"] = tool_calls
+        messages.append(assistant_payload)
+
+        if not tool_calls:
+            final_text = assistant_content.strip()
+            if not final_text:
+                raise HTTPException(status_code=502, detail="Ollama returned an empty response.")
+            update_session_state(session, message={"role": "assistant", "content": final_text})
+            return final_text, data_was_saved
+
+        for tc in tool_calls:
+            tool_name = _get_tool_name(tc)
+            if tool_name != "update_form_state":
+                messages.append({
+                    "role": "tool",
+                    "tool_name": tool_name,
+                    "content": json.dumps({"ok": False, "error": f"Unknown tool: {tool_name}"}),
+                })
+                continue
+
+            extracted = _parse_tool_args(tc)
+            result = apply_tool_call(session.session_id, blueprint, extracted)
+            data_was_saved = data_was_saved or bool(result.get("updated_fields"))
+
+            messages.append({
+                "role": "tool",
+                "tool_name": "update_form_state",
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+            update_session_state(
+                session,
+                message={
+                    "role": "tool",
+                    "content": _summarize_tool_result(result),
+                },
+            )
+
+        current_ctx = prepare_turn(session.session_id, blueprint)
         if messages and messages[0]["role"] == "system":
             messages[0]["content"] = current_ctx.system_prompt
 

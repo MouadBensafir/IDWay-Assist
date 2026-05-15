@@ -44,10 +44,13 @@ GET    /workflows/{workflow_id}/sessions/{session_id}/step/{step_id}/chat_contex
 from __future__ import annotations
 
 import json
+import asyncio
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from .dynamic_server import run_dynamic_blueprint_turn
@@ -83,6 +86,8 @@ from .workflow_session_store import (
 )
 
 workflow_router = APIRouter(prefix="/workflows", tags=["Service Workflows"])
+
+_aborted_sessions: set[str] = set()
 
 _WORKFLOW_HINTS: dict[str, tuple[str, ...]] = {
     "us_nonimmigrant_visa": (
@@ -194,6 +199,10 @@ def _selection_prompt_response() -> WorkflowSelectionResponse:
         ),
         available_workflows=catalog,
     )
+
+
+def _sse_event(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(jsonable_encoder(data), ensure_ascii=False)}\n\n"
 
 
 def _step_detail(
@@ -450,6 +459,7 @@ async def remove_session(workflow_id: str, session_id: str) -> dict[str, Any]:
 async def remove_session_by_id(session_id: str) -> dict[str, Any]:
     """Delete a workflow session file without requiring the caller to know the workflow_id."""
     deleted = delete_workflow_session(session_id)
+    _aborted_sessions.discard(session_id)
     return {"session_id": session_id, "deleted": deleted}
 
 
@@ -486,6 +496,140 @@ async def workflow_chat_auto(request: Request) -> WorkflowSelectionResponse:
         reset=reset,
         requested_step_id=requested_step_id,
         files=files,
+    )
+
+
+@workflow_router.post("/chat/abort")
+async def abort_chat(body: dict[str, Any]) -> dict[str, Any]:
+    workflow_session_id = str(body.get("workflow_session_id") or "").strip()
+    if workflow_session_id:
+        _aborted_sessions.add(workflow_session_id)
+    return {"aborted": True, "workflow_session_id": workflow_session_id}
+
+
+@workflow_router.websocket("/chat/ws")
+async def workflow_chat_ws(websocket: WebSocket) -> None:
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_json()
+            prompt = str(data.get("prompt") or "").strip()
+            workflow_session_id = str(data.get("workflow_session_id") or "").strip() or None
+
+            if not prompt:
+                await websocket.send_json({"event": "error", "detail": "Empty prompt."})
+                continue
+
+            async def emit_event(event: str, payload: dict[str, Any]) -> None:
+                await websocket.send_json({"event": event, **payload})
+
+            try:
+                inferred_wf_id: str | None = None
+                if workflow_session_id:
+                    loaded = load_workflow_session(workflow_session_id)
+                    if loaded is not None:
+                        inferred_wf_id = loaded.workflow_id
+                if not inferred_wf_id:
+                    inferred_wf_id = _infer_workflow_id(prompt) or "us_nonimmigrant_visa"
+
+                response = await _run_workflow_chat_stream(
+                    workflow_id=inferred_wf_id,
+                    workflow_session_id=workflow_session_id,
+                    prompt=prompt,
+                    reset=False,
+                    requested_step_id=None,
+                    files=[],
+                    emit_event=emit_event,
+                )
+                await websocket.send_json({"event": "final", **response.model_dump(mode="json")})
+            except HTTPException as exc:
+                await websocket.send_json({"event": "error", "detail": exc.detail})
+            except Exception:
+                await websocket.send_json({"event": "error", "detail": "The stream failed unexpectedly."})
+    except WebSocketDisconnect:
+        pass
+
+
+@workflow_router.post("/chat/stream")
+async def workflow_chat_auto_stream(request: Request) -> StreamingResponse:
+    workflow_session_id, prompt, reset, requested_step_id, files = await _parse_workflow_chat_request(request)
+
+    if workflow_session_id:
+        state = load_workflow_session(workflow_session_id)
+        if state is None:
+            if reset:
+                selection = _selection_prompt_response()
+                async def selection_stream():
+                    yield _sse_event("final", selection.model_dump(mode="json"))
+                return StreamingResponse(selection_stream(), media_type="text/event-stream")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow session '{workflow_session_id}' not found.",
+            )
+        workflow_id = state.workflow_id
+    else:
+        inferred_workflow_id = _infer_workflow_id(prompt)
+        if inferred_workflow_id is None:
+            selection = _selection_prompt_response()
+            async def selection_stream():
+                yield _sse_event("final", selection.model_dump(mode="json"))
+            return StreamingResponse(selection_stream(), media_type="text/event-stream")
+        workflow_id = inferred_workflow_id
+
+    async def event_stream():
+        local_session_id = workflow_session_id
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def produce() -> None:
+            try:
+                if local_session_id and local_session_id in _aborted_sessions:
+                    _aborted_sessions.discard(local_session_id)
+                    return
+                response = await _run_workflow_chat_stream(
+                    workflow_id=workflow_id,
+                    workflow_session_id=local_session_id,
+                    prompt=prompt,
+                    reset=reset,
+                    requested_step_id=requested_step_id,
+                    files=files,
+                    emit_event=lambda event, data: queue.put_nowait(_sse_event(event, data)),
+                )
+                if local_session_id and local_session_id in _aborted_sessions:
+                    _aborted_sessions.discard(local_session_id)
+                    return
+                queue.put_nowait(_sse_event("final", response.model_dump(mode="json")))
+            except HTTPException as exc:
+                queue.put_nowait(_sse_event("error", {"detail": exc.detail, "status_code": exc.status_code}))
+            except Exception:
+                queue.put_nowait(_sse_event("error", {"detail": "The stream failed unexpectedly.", "status_code": 500}))
+            finally:
+                queue.put_nowait(None)
+
+        producer = asyncio.create_task(produce())
+        try:
+            while True:
+                if local_session_id and local_session_id in _aborted_sessions:
+                    _aborted_sessions.discard(local_session_id)
+                    if not producer.done():
+                        producer.cancel()
+                        await producer
+                    break
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            if not producer.done():
+                producer.cancel()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
@@ -549,6 +693,120 @@ async def _run_workflow_chat(
         blueprint=blueprint,
         prompt=prompt,
         files=files,
+    )
+
+    refreshed_state = _get_session(state.workflow_session_id, workflow_id)
+    step_completed = False
+    next_step = step
+    available_steps = _available_step_summaries(refreshed_state, wf)
+
+    if dynamic_response.completed and refreshed_state.step_statuses.get(step.step_id) != StepStatus.COMPLETED:
+        filled_fields = _load_step_filled_fields(wf, refreshed_state, step, dynamic_response.filled_fields)
+        available_steps = _complete_step(wf, refreshed_state, step, filled_fields)
+        refreshed_state = _get_session(state.workflow_session_id, workflow_id)
+        step_completed = True
+        next_step = _select_actionable_step(wf, refreshed_state)
+    elif dynamic_response.completed:
+        refreshed_state = _get_session(state.workflow_session_id, workflow_id)
+        next_step = _select_actionable_step(wf, refreshed_state)
+
+    response_text = dynamic_response.response
+    if step_completed:
+        if refreshed_state.workflow_complete:
+            response_text = f"{response_text}\n\nWorkflow complete."
+        elif next_step is not None:
+            response_text = (
+                f"{response_text}\n\nNext step: {next_step.title}. "
+                f"Continue the conversation to proceed."
+            )
+
+    return WorkflowChatResponse(
+        workflow_session_id=refreshed_state.workflow_session_id,
+        workflow_id=wf.workflow_id,
+        workflow_title=wf.title,
+        response=response_text,
+        model=dynamic_response.model,
+        workflow_complete=refreshed_state.workflow_complete,
+        current_step_id=step.step_id,
+        current_step_title=step.title,
+        current_step_status=refreshed_state.step_statuses.get(step.step_id),
+        current_chat_session_id=chat_session_id,
+        step_completed=step_completed,
+        next_step_id=next_step.step_id if step_completed and next_step is not None else None,
+        next_step_title=next_step.title if step_completed and next_step is not None else None,
+        available_steps=available_steps,
+        step_statuses=refreshed_state.step_statuses,
+        missing_fields=dynamic_response.missing_fields,
+        filled_fields=dynamic_response.filled_fields,
+        submission_path=dynamic_response.submission_path,
+        token_usage=dynamic_response.token_usage,
+    )
+
+
+async def _run_workflow_chat_stream(
+    *,
+    workflow_id: str,
+    workflow_session_id: str | None,
+    prompt: str,
+    reset: bool,
+    requested_step_id: str | None,
+    files: list[StarletteUploadFile],
+    emit_event: Any,
+) -> WorkflowChatResponse:
+    wf = _get_workflow(workflow_id)
+    if workflow_session_id and reset:
+        delete_workflow_session(workflow_session_id)
+
+    state = get_or_create_workflow_session(wf, workflow_session_id)
+    if state.workflow_complete:
+        return WorkflowChatResponse(
+            workflow_session_id=state.workflow_session_id,
+            workflow_id=wf.workflow_id,
+            workflow_title=wf.title,
+            response="This workflow is already complete.",
+            model="workflow-router",
+            workflow_complete=True,
+            available_steps=[],
+            step_statuses=state.step_statuses,
+        )
+
+    step = _select_actionable_step(wf, state, requested_step_id)
+    if step is None:
+        raise HTTPException(
+            status_code=409,
+            detail="No actionable workflow step is available yet. Remaining steps are still locked.",
+        )
+
+    chat_session_id = _ensure_step_chat_session(wf, state, step)
+    chat_session = get_or_create_session(chat_session_id, reset=False)
+    blueprint = blueprint_repository.get(step.blueprint_id)
+    if blueprint is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Blueprint '{step.blueprint_id}' was not found for step '{step.step_id}'.",
+        )
+
+    emit_event(
+        "meta",
+        {
+            "workflow_session_id": state.workflow_session_id,
+            "workflow_id": wf.workflow_id,
+            "workflow_title": wf.title,
+            "current_step_id": step.step_id,
+            "current_step_title": step.title,
+            "current_chat_session_id": chat_session_id,
+        },
+    )
+
+    async def on_text_chunk(text: str) -> None:
+        emit_event("delta", {"text": text})
+
+    dynamic_response = await run_dynamic_blueprint_turn(
+        session=chat_session,
+        blueprint=blueprint,
+        prompt=prompt,
+        files=files,
+        on_text_chunk=on_text_chunk,
     )
 
     refreshed_state = _get_session(state.workflow_session_id, workflow_id)

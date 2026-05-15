@@ -1,0 +1,415 @@
+diff --git a/node_modules/expo-speech-recognition/android/build/20260515_7915955238181790359.compiler.options b/node_modules/expo-speech-recognition/android/build/20260515_7915955238181790359.compiler.options
+new file mode 100644
+index 0000000..6902961
+--- /dev/null
++++ b/node_modules/expo-speech-recognition/android/build/20260515_7915955238181790359.compiler.options
+@@ -0,0 +1 @@
++"-Xallow-no-source-files" "-classpath" "C:\\Users\\Mouad\\AppData\\Local\\Android\\Sdk\\platforms\\android-36\\android.jar;C:\\Users\\Mouad\\AppData\\Local\\Android\\Sdk\\build-tools\\35.0.0\\core-lambda-stubs.jar;C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\build\\intermediates\\compile_r_class_jar\\debug\\generateDebugRFile\\R.jar;C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-modules-core\\android\\build\\intermediates\\compile_library_classes_jar\\debug\\bundleLibCompileToJarDebug\\classes.jar;C:\\Users\\Mouad\\.gradle\\caches\\8.14.3\\transforms\\c657988da267bb0245a495d5302aa52a\\transformed\\core-ktx-1.13.1-api.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\kotlinx-coroutines-core-jvm\\1.7.3\\2b09627576f0989a436a00a4a54b55fa5026fb86\\kotlinx-coroutines-core-jvm-1.7.3.jar;C:\\Users\\Mouad\\.gradle\\caches\\8.14.3\\transforms\\84ae45e8f1a4840639cecab873f48422\\transformed\\core-1.13.1-api.jar;C:\\Users\\Mouad\\.gradle\\caches\\8.14.3\\transforms\\842237e81d14273837d38f8182d9e2ca\\transformed\\lifecycle-runtime-2.6.2-api.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\androidx.lifecycle\\lifecycle-common\\2.6.2\\10f354fdb64868baecd67128560c5a0d6312c495\\lifecycle-common-2.6.2.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlinx\\kotlinx-coroutines-android\\1.7.3\\38d9cad3a0b03a10453b56577984bdeb48edeed5\\kotlinx-coroutines-android-1.7.3.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlin\\kotlin-stdlib-jdk8\\1.8.20\\73576ddf378c5b4f1f6b449fe6b119b8183fc078\\kotlin-stdlib-jdk8-1.8.20.jar;C:\\Users\\Mouad\\.gradle\\caches\\8.14.3\\transforms\\f624568e69eb3592e8002d549ccbfd1f\\transformed\\versionedparcelable-1.1.1-api.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\androidx.arch.core\\core-common\\2.2.0\\5e1b8b81dfd5f52c56a8d53b18ca759c19a301f3\\core-common-2.2.0.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\androidx.collection\\collection\\1.1.0\\1f27220b47669781457de0d600849a5de0e89909\\collection-1.1.0.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\androidx.annotation\\annotation-jvm\\1.7.1\\920472d40adcdef5e18708976b3e314f9a636fcd\\annotation-jvm-1.7.1.jar;C:\\Users\\Mouad\\.gradle\\caches\\8.14.3\\transforms\\e14d242f1efbbea22b094975f03113fd\\transformed\\annotation-experimental-1.4.0-api.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlin\\kotlin-stdlib\\2.1.20\\aa8ca79cd50578314f6d1180c47cbe14c0fee567\\kotlin-stdlib-2.1.20.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains.kotlin\\kotlin-stdlib-jdk7\\2.1.20\\72672df5e83231744c00550955b10acb71ed49d6\\kotlin-stdlib-jdk7-2.1.20.jar;C:\\Users\\Mouad\\.gradle\\caches\\modules-2\\files-2.1\\org.jetbrains\\annotations\\23.0.0\\8cc20c07506ec18e0834947b84a864bfc094484e\\annotations-23.0.0.jar" "-d" "C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\build\\tmp\\kotlin-classes\\debug" "-jvm-target" "17" "-module-name" "expo-speech-recognition_debug" "-no-jdk" "-no-reflect" "-no-stdlib" "C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\build\\generated\\source\\buildConfig\\debug\\expo\\modules\\speechrecognition\\BuildConfig.java" "C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\src\\main\\java\\expo\\modules\\speechrecognition\\DelayedFileStreamer.kt" "C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\src\\main\\java\\expo\\modules\\speechrecognition\\ExpoAudioRecorder.kt" "C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\src\\main\\java\\expo\\modules\\speechrecognition\\ExpoSpeechRecognitionModule.kt" "C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\src\\main\\java\\expo\\modules\\speechrecognition\\ExpoSpeechRecognitionOptions.kt" "C:\\Users\\Mouad\\Desktop\\Expo_Test\\node_modules\\expo-speech-recognition\\android\\src\\main\\java\\expo\\modules\\speechrecognition\\ExpoSpeechService.kt"
+\ No newline at end of file
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/META-INF/expo-speech-recognition_debug.kotlin_module b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/META-INF/expo-speech-recognition_debug.kotlin_module
+new file mode 100644
+index 0000000..0be9fc0
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/META-INF/expo-speech-recognition_debug.kotlin_module differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/AudioRecorder.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/AudioRecorder.class
+new file mode 100644
+index 0000000..9493a23
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/AudioRecorder.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/AudioSourceOptions.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/AudioSourceOptions.class
+new file mode 100644
+index 0000000..2c66c41
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/AudioSourceOptions.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer$startStreaming$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer$startStreaming$1.class
+new file mode 100644
+index 0000000..d05f104
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer$startStreaming$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer$streamAudioContents$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer$streamAudioContents$1.class
+new file mode 100644
+index 0000000..32b32ab
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer$streamAudioContents$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer.class
+new file mode 100644
+index 0000000..08f0fae
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/DelayedFileStreamer.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoAudioRecorder$Companion.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoAudioRecorder$Companion.class
+new file mode 100644
+index 0000000..28350ec
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoAudioRecorder$Companion.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoAudioRecorder.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoAudioRecorder.class
+new file mode 100644
+index 0000000..d39b498
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoAudioRecorder.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$WhenMappings.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$WhenMappings.class
+new file mode 100644
+index 0000000..a07ca90
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$WhenMappings.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$1.class
+new file mode 100644
+index 0000000..7165ee5
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$2$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$2$1.class
+new file mode 100644
+index 0000000..0f182a5
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$2$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$2.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$2.class
+new file mode 100644
+index 0000000..c170ec0
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$1$23$2.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$1.class
+new file mode 100644
+index 0000000..3697e7d
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$10.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$10.class
+new file mode 100644
+index 0000000..9ce56b5
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$10.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$11.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$11.class
+new file mode 100644
+index 0000000..cdcb0db
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$11.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$12.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$12.class
+new file mode 100644
+index 0000000..8a3d2b5
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$12.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$13.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$13.class
+new file mode 100644
+index 0000000..316bbfd
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$13.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$14.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$14.class
+new file mode 100644
+index 0000000..8ba3002
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$14.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$15.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$15.class
+new file mode 100644
+index 0000000..8bbd37a
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$15.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$16.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$16.class
+new file mode 100644
+index 0000000..003ef13
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$16.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$17.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$17.class
+new file mode 100644
+index 0000000..aa435ae
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$17.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$18.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$18.class
+new file mode 100644
+index 0000000..a544402
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$18.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$19.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$19.class
+new file mode 100644
+index 0000000..67536bf
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$19.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$2.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$2.class
+new file mode 100644
+index 0000000..bc6725f
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$2.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$20.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$20.class
+new file mode 100644
+index 0000000..3af9ff8
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$20.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$21.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$21.class
+new file mode 100644
+index 0000000..7dbd976
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$21.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$3.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$3.class
+new file mode 100644
+index 0000000..4690072
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$3.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$4.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$4.class
+new file mode 100644
+index 0000000..8c70b84
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$4.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$5.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$5.class
+new file mode 100644
+index 0000000..ab73e92
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$5.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$6.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$6.class
+new file mode 100644
+index 0000000..67f9c29
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$6.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$7.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$7.class
+new file mode 100644
+index 0000000..d1b2bea
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$7.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$8.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$8.class
+new file mode 100644
+index 0000000..2e977f0
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$8.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$9.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$9.class
+new file mode 100644
+index 0000000..01440f8
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunction$9.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$1.class
+new file mode 100644
+index 0000000..1e8d1f1
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$2.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$2.class
+new file mode 100644
+index 0000000..f6be306
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$2.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$3.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$3.class
+new file mode 100644
+index 0000000..551c647
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$3.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$4.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$4.class
+new file mode 100644
+index 0000000..d5b4afb
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$AsyncFunctionWithPromise$4.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$1.class
+new file mode 100644
+index 0000000..b8ee78c
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$2.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$2.class
+new file mode 100644
+index 0000000..b1995a2
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$2.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$3.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$3.class
+new file mode 100644
+index 0000000..1dcf04b
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$3.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$4.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$4.class
+new file mode 100644
+index 0000000..f41a7f5
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$4.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$5.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$5.class
+new file mode 100644
+index 0000000..6c41dd7
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$5.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$6.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$6.class
+new file mode 100644
+index 0000000..f731666
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$Function$6.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$1.class
+new file mode 100644
+index 0000000..2bc53c2
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$10.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$10.class
+new file mode 100644
+index 0000000..37d6991
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$10.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$2.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$2.class
+new file mode 100644
+index 0000000..9664e6f
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$2.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$3.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$3.class
+new file mode 100644
+index 0000000..7259719
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$3.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$4.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$4.class
+new file mode 100644
+index 0000000..9dd894c
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$4.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$5.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$5.class
+new file mode 100644
+index 0000000..39dafcf
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$5.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$6.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$6.class
+new file mode 100644
+index 0000000..ebce537
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$6.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$7.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$7.class
+new file mode 100644
+index 0000000..fe5bb08
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$7.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$8.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$8.class
+new file mode 100644
+index 0000000..a290230
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$8.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$9.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$9.class
+new file mode 100644
+index 0000000..d91e671
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$FunctionWithoutArgs$9.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$OnDestroy$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$OnDestroy$1.class
+new file mode 100644
+index 0000000..6cd0a01
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$definition$lambda$27$$inlined$OnDestroy$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$getSupportedLocales$1$1.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$getSupportedLocales$1$1.class
+new file mode 100644
+index 0000000..d553de7
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule$getSupportedLocales$1$1.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule.class
+new file mode 100644
+index 0000000..0fa1ce0
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModule.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModuleKt.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModuleKt.class
+new file mode 100644
+index 0000000..ee78bee
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechRecognitionModuleKt.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechService$Companion.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechService$Companion.class
+new file mode 100644
+index 0000000..0620c01
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechService$Companion.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechService.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechService.class
+new file mode 100644
+index 0000000..ec3539d
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/ExpoSpeechService.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/GetSupportedLocaleOptions.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/GetSupportedLocaleOptions.class
+new file mode 100644
+index 0000000..c457cae
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/GetSupportedLocaleOptions.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/RecognitionState.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/RecognitionState.class
+new file mode 100644
+index 0000000..a2597f6
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/RecognitionState.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/RecordingOptions.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/RecordingOptions.class
+new file mode 100644
+index 0000000..1419aa4
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/RecordingOptions.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SoundState.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SoundState.class
+new file mode 100644
+index 0000000..560d12f
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SoundState.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SpeechRecognitionErrorEvent.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SpeechRecognitionErrorEvent.class
+new file mode 100644
+index 0000000..272776e
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SpeechRecognitionErrorEvent.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SpeechRecognitionOptions.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SpeechRecognitionOptions.class
+new file mode 100644
+index 0000000..2f3e2b3
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/SpeechRecognitionOptions.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/TriggerOfflineModelDownloadOptions.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/TriggerOfflineModelDownloadOptions.class
+new file mode 100644
+index 0000000..7eecd03
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/TriggerOfflineModelDownloadOptions.class differ
+diff --git a/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/VolumeChangeEventOptions.class b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/VolumeChangeEventOptions.class
+new file mode 100644
+index 0000000..72ad0f7
+Binary files /dev/null and b/node_modules/expo-speech-recognition/android/build/tmp/kotlin-classes/debug/expo/modules/speechrecognition/VolumeChangeEventOptions.class differ
+diff --git a/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoAudioRecorder.kt b/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoAudioRecorder.kt
+index aaa462a..2a8867f 100644
+--- a/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoAudioRecorder.kt
++++ b/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoAudioRecorder.kt
+@@ -5,6 +5,7 @@ import android.content.Context
+ import android.media.AudioFormat
+ import android.media.AudioRecord
+ import android.media.MediaRecorder
++import android.media.audiofx.AcousticEchoCanceler
+ import android.os.ParcelFileDescriptor
+ import android.os.ParcelFileDescriptor.AutoCloseOutputStream
+ import android.os.Build
+@@ -35,6 +36,7 @@ class ExpoAudioRecorder(
+     private val outputFilePath: String?,
+ ) : AudioRecorder {
+     private var audioRecorder: AudioRecord? = null
++    private var acousticEchoCanceler: AcousticEchoCanceler? = null
+ 
+     var outputFile: File? = null
+     var outputFileUri = "file://$outputFilePath"
+@@ -132,15 +134,37 @@ class ExpoAudioRecorder(
+     }
+ 
+     @SuppressLint("MissingPermission")
+-    private fun createRecorder(): AudioRecord =
+-        AudioRecord(
+-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
++    private fun createRecorder(): AudioRecord {
++        val useAec = Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN && AcousticEchoCanceler.isAvailable()
++        val sourceType = if (useAec) MediaRecorder.AudioSource.VOICE_COMMUNICATION else MediaRecorder.AudioSource.VOICE_RECOGNITION
++
++        val record = AudioRecord(
++            sourceType,
+             sampleRateInHz,
+             channelConfig,
+             AudioFormat.ENCODING_PCM_16BIT,
+             bufferSizeInBytes,
+         )
+ 
++        if (useAec && record.state == AudioRecord.STATE_INITIALIZED) {
++            attachAec(record)
++        }
++
++        return record
++    }
++
++    private fun attachAec(record: AudioRecord) {
++        try {
++            val aec = AcousticEchoCanceler.create(record.audioSessionId)
++            aec.enabled = true
++            acousticEchoCanceler = aec
++            Log.d(TAG, "AcousticEchoCanceler enabled on audio session ${record.audioSessionId}")
++        } catch (e: Exception) {
++            Log.e(TAG, "Failed to enable AcousticEchoCanceler", e)
++            acousticEchoCanceler = null
++        }
++    }
++
+     override fun start() {
+         createRecorder().apply {
+             audioRecorder = this
+@@ -163,6 +187,8 @@ class ExpoAudioRecorder(
+ 
+     override fun stop() {
+         isRecordingAudio = false
++        acousticEchoCanceler?.release()
++        acousticEchoCanceler = null
+         audioRecorder?.stop()
+         audioRecorder?.release()
+         audioRecorder = null
+diff --git a/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoSpeechRecognitionModule.kt b/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoSpeechRecognitionModule.kt
+index 9b523ab..3873399 100644
+--- a/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoSpeechRecognitionModule.kt
++++ b/node_modules/expo-speech-recognition/android/src/main/java/expo/modules/speechrecognition/ExpoSpeechRecognitionModule.kt
+@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
+ import android.content.ComponentName
+ import android.content.Context
+ import android.content.Intent
++import android.media.audiofx.AcousticEchoCanceler
+ import android.os.Build
+ import android.os.Bundle
+ import android.os.Handler
+@@ -240,6 +241,10 @@ class ExpoSpeechRecognitionModule : Module() {
+                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+             }
+ 
++            Function("isAecAvailable") {
++                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && AcousticEchoCanceler.isAvailable()
++            }
++
+             // Not necessary for Android
+             Function("setCategoryIOS") { _: Any ->
+                 // Do nothing
+diff --git a/node_modules/expo-speech-recognition/build/ExpoSpeechRecognitionModule.types.d.ts b/node_modules/expo-speech-recognition/build/ExpoSpeechRecognitionModule.types.d.ts
+index fa62cc8..9206dca 100644
+--- a/node_modules/expo-speech-recognition/build/ExpoSpeechRecognitionModule.types.d.ts
++++ b/node_modules/expo-speech-recognition/build/ExpoSpeechRecognitionModule.types.d.ts
+@@ -651,6 +651,18 @@ export declare class ExpoSpeechRecognitionModuleType extends NativeModule<ExpoSp
+      * This mostly applies to Android devices, to check if it's greater than Android 13.
+      */
+     supportsRecording(): boolean;
++    /**
++     * [Android only] Whether Acoustic Echo Cancellation (AEC) is available on
++     * this device and will be used during speech recognition.
++     *
++     * When true, the native module uses `VOICE_COMMUNICATION` audio source
++     * with `AcousticEchoCanceler` attached to the `AudioRecord` session,
++     * allowing STT to remain active while TTS plays without crosstalk.
++     *
++     * When false, STT will be stopped before TTS playback and restarted
++     * afterwards as a fallback.
++     */
++    isAecAvailable(): boolean;
+     /**
+      * Whether on-device speech recognition is available.
+      *
+diff --git a/node_modules/expo-speech-recognition/src/ExpoSpeechRecognitionModule.types.ts b/node_modules/expo-speech-recognition/src/ExpoSpeechRecognitionModule.types.ts
+index e306d49..70d73f9 100644
+--- a/node_modules/expo-speech-recognition/src/ExpoSpeechRecognitionModule.types.ts
++++ b/node_modules/expo-speech-recognition/src/ExpoSpeechRecognitionModule.types.ts
+@@ -697,6 +697,18 @@ export declare class ExpoSpeechRecognitionModuleType extends NativeModule<ExpoSp
+    * This mostly applies to Android devices, to check if it's greater than Android 13.
+    */
+   supportsRecording(): boolean;
++  /**
++   * [Android only] Whether Acoustic Echo Cancellation (AEC) is available on
++   * this device and will be used during speech recognition.
++   *
++   * When true, the native module uses `VOICE_COMMUNICATION` audio source
++   * with `AcousticEchoCanceler` attached to the `AudioRecord` session,
++   * allowing STT to remain active while TTS plays without crosstalk.
++   *
++   * When false, STT will be stopped before TTS playback and restarted
++   * afterwards as a fallback.
++   */
++  isAecAvailable(): boolean;
+   /**
+    * Whether on-device speech recognition is available.
+    *

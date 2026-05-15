@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Platform,
   Pressable,
@@ -27,7 +28,6 @@ import appConfig from "../config.json";
 const DEFAULT_LOCALE = "en-US";
 const UNSUPPORTED_PLATFORM = Platform.OS === "web";
 const API_URL = getBackendUrl();
-const WORKFLOW_ID = getWorkflowId();
 
 type Status =
   | "checking"
@@ -77,39 +77,117 @@ export default function MiniTalkie() {
   const finalTranscriptRef = useRef("");
   const shouldSpeakOnEndRef = useRef(false);
   const sessionIdRef = useRef("");
+  const speechQueueRef = useRef<string[]>([]);
+  const speechBufferRef = useRef("");
+  const isSpeakingChunkRef = useRef(false);
+  const streamCompleteRef = useRef(false);
+  const activeRequestAbortRef = useRef<AbortController | null>(null);
+  const continuousConversationRef = useRef(false);
+  const manualStopRef = useRef(false);
+  const statusRef = useRef<Status>(UNSUPPORTED_PLATFORM ? "error" : "checking");
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isBargeInProgressRef = useRef(false);
+  const latestTranscriptRef = useRef("");
+  const aecAvailableRef = useRef(false);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
+    if (assistantReply) {
+      fadeAnim.setValue(0.8);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [assistantReply, fadeAnim]);
 
   useSpeechRecognitionEvent("start", () => {
     setErrorMessage("");
     setStatus("listening");
   });
 
+  const resetSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+    silenceTimerRef.current = setTimeout(() => {
+      silenceTimerRef.current = null;
+      if (statusRef.current === "processing") {
+        return;
+      }
+      const text = finalTranscriptRef.current.trim() || latestTranscriptRef.current.trim();
+      if (text && statusRef.current !== "error") {
+        finalTranscriptRef.current = text;
+        setTranscript(text);
+        shouldSpeakOnEndRef.current = false;
+        setStatus("processing");
+        void fetchAssistantReply();
+      }
+    }, 2000);
+  };
+
+  const clearSilenceTimer = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  };
+
   useSpeechRecognitionEvent("result", (event: ExpoSpeechRecognitionResultEvent) => {
     const nextTranscript = event.results[0]?.transcript?.trim() ?? "";
 
     if (!nextTranscript) {
+      resetSilenceTimer();
       return;
     }
 
-    setPartialTranscript(nextTranscript);
+    latestTranscriptRef.current = nextTranscript;
 
     if (event.isFinal) {
-      finalTranscriptRef.current = nextTranscript;
-      setTranscript(nextTranscript);
+      const separator = finalTranscriptRef.current ? " " : "";
+      finalTranscriptRef.current += separator + nextTranscript;
+      setTranscript(finalTranscriptRef.current);
+      setPartialTranscript("");
+    } else {
+      setPartialTranscript(nextTranscript);
     }
+
+    if (statusRef.current === "speaking" || statusRef.current === "processing") {
+      finalTranscriptRef.current = "";
+      isBargeInProgressRef.current = true;
+      sendAbortSignal();
+      activeRequestAbortRef.current?.abort();
+      activeRequestAbortRef.current = null;
+      if (statusRef.current === "speaking") {
+        Speech.stop().catch(() => undefined);
+      }
+      resetSpeechQueue();
+      setAssistantReply("");
+      statusRef.current = "listening";
+      setStatus("listening");
+    }
+
+    resetSilenceTimer();
   });
 
   useSpeechRecognitionEvent("error", (event: ExpoSpeechRecognitionErrorEvent) => {
-    shouldSpeakOnEndRef.current = false;
+    continuousConversationRef.current = false;
+    clearSilenceTimer();
     setStatus("error");
     setErrorMessage(formatRecognitionError(event));
   });
 
   useSpeechRecognitionEvent("end", () => {
-    void handleRecognitionEnded();
+    clearSilenceTimer();
   });
 
   useEffect(() => {
@@ -124,7 +202,7 @@ export default function MiniTalkie() {
     void prepareVoices();
 
     return () => {
-      void deleteConversationSession(sessionIdRef.current);
+      activeRequestAbortRef.current?.abort();
       Speech.stop().catch(() => undefined);
       ExpoSpeechRecognitionModule.abort();
     };
@@ -157,7 +235,13 @@ export default function MiniTalkie() {
         return;
       }
 
-      setStatus("ready");
+      if (typeof (ExpoSpeechRecognitionModule as any).isAecAvailable === "function") {
+        aecAvailableRef.current = (ExpoSpeechRecognitionModule as any).isAecAvailable();
+      }
+      continuousConversationRef.current = true;
+      manualStopRef.current = false;
+      ExpoSpeechRecognitionModule.abort();
+      await beginListeningTurn();
     } catch (error) {
       setStatus("error");
       setErrorMessage(
@@ -188,81 +272,43 @@ export default function MiniTalkie() {
     }
   };
 
-  const handleRecognitionEnded = async () => {
-    if (!shouldSpeakOnEndRef.current) {
-      if (status !== "error") {
-        setStatus("ready");
-      }
-      return;
-    }
-
-    shouldSpeakOnEndRef.current = false;
-    setStatus("processing");
-    await fetchAssistantReply();
-  };
-
-  const fetchAssistantReply = async () => {
-    const spokenText = finalTranscriptRef.current.trim();
-
-    if (!spokenText) {
-      setStatus("ready");
-      setPartialTranscript("");
-      setErrorMessage("No speech was captured. Tap and try again.");
-      return;
-    }
-
+  const beginListeningTurn = async ({
+    automatic = false,
+    preserveAssistantReply = false,
+  }: {
+    automatic?: boolean;
+    preserveAssistantReply?: boolean;
+  } = {}) => {
     try {
-      const { assistantReply: assistantText, sessionId: nextSessionId, tokenUsage: nextTokenUsage } =
-        await requestAssistantReply(spokenText, sessionId, attachments);
-      if (nextSessionId) {
-        setSessionId(nextSessionId);
-      }
-      setTokenUsage(nextTokenUsage);
-      setAttachments([]);
-      setAssistantReply(assistantText);
-      setStatus("speaking");
-      await Speech.stop();
-
-      Speech.speak(assistantText, {
-        language: selectedLanguage,
-        voice: selectedVoiceId || undefined,
-        onDone: () => setStatus("ready"),
-        onStopped: () => setStatus("ready"),
-        onError: () => {
-          setStatus("error");
-          setErrorMessage("The device voice could not play back the assistant response.");
-        },
-      });
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(
-        getErrorMessage(error, "The app could not get a response from the assistant.")
-      );
-    }
-  };
-
-  const handleListenPress = async () => {
-    try {
+      ExpoSpeechRecognitionModule.abort();
       setStatus("checking");
       setErrorMessage("");
       setTranscript("");
-      setAssistantReply("");
       setPartialTranscript("");
       finalTranscriptRef.current = "";
       shouldSpeakOnEndRef.current = false;
+      manualStopRef.current = false;
 
-      await Speech.stop();
+      if (!preserveAssistantReply) {
+        setAssistantReply("");
+      }
+
+      if (!automatic) {
+        await cancelActiveAssistantOutput();
+      }
 
       const permissions =
         await ExpoSpeechRecognitionModule.requestPermissionsAsync();
 
       if (!permissions.granted) {
+        continuousConversationRef.current = false;
         setStatus("error");
         setErrorMessage("Microphone permission was denied.");
         return;
       }
 
       if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+        continuousConversationRef.current = false;
         setStatus("error");
         setErrorMessage(getUnavailableMessage());
         return;
@@ -273,14 +319,18 @@ export default function MiniTalkie() {
       ExpoSpeechRecognitionModule.start({
         lang: selectedLanguage,
         interimResults: true,
-        continuous: false,
+        continuous: true,
         maxAlternatives: 1,
         androidIntentOptions: {
           EXTRA_LANGUAGE_MODEL: "free_form",
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 10000,
         },
       });
     } catch (error) {
       shouldSpeakOnEndRef.current = false;
+      if (!automatic) {
+        continuousConversationRef.current = false;
+      }
       setStatus("error");
       setErrorMessage(
         getErrorMessage(error, "Unable to start listening.")
@@ -288,25 +338,136 @@ export default function MiniTalkie() {
     }
   };
 
-  const handleMainButtonPress = async () => {
-    if (status === "speaking") {
-      try {
-        await Speech.stop();
-        setStatus("ready");
-      } catch (error) {
-        setStatus("error");
-        setErrorMessage(
-          getErrorMessage(error, "Unable to stop speaking.")
-        );
-      }
+  const resumeListeningAfterSpeech = async () => {
+    if (!continuousConversationRef.current || manualStopRef.current) {
       return;
     }
+    finalTranscriptRef.current = "";
+    shouldSpeakOnEndRef.current = true;
 
-    await handleListenPress();
+    if (!aecAvailableRef.current) {
+      ExpoSpeechRecognitionModule.start({
+        lang: selectedLanguage,
+        interimResults: true,
+        continuous: true,
+        maxAlternatives: 1,
+        androidIntentOptions: {
+          EXTRA_LANGUAGE_MODEL: "free_form",
+          EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 10000,
+        },
+      });
+    }
+
+    setStatus("listening");
   };
 
+  const fetchAssistantReply = async () => {
+    const spokenText = finalTranscriptRef.current.trim();
+
+    if (!spokenText) {
+      setPartialTranscript("");
+      return;
+    }
+    finalTranscriptRef.current = "";
+
+    const abortController = new AbortController();
+    try {
+      activeRequestAbortRef.current = abortController;
+      resetSpeechQueue();
+      setAssistantReply("");
+
+      let streamedReply = "";
+
+      const streamRequest = async () => {
+        try {
+          return await requestAssistantReplyWebSocket(spokenText, sessionIdRef.current, attachments, {
+            signal: abortController.signal,
+            onMeta: onMetaHandler,
+            onDelta: onDeltaHandler,
+            onFinal: onFinalHandler,
+          });
+        } catch {
+          return requestAssistantReplyStream(spokenText, sessionIdRef.current, attachments, {
+            signal: abortController.signal,
+            onMeta: onMetaHandler,
+            onDelta: onDeltaHandler,
+            onFinal: onFinalHandler,
+          });
+        }
+      };
+
+      const onMetaHandler = (payload: WorkflowStreamPayload) => {
+        const nextSessionIdFromMeta = `${payload.workflow_session_id || payload.session_id || ""}`.trim();
+        if (nextSessionIdFromMeta) {
+          setSessionId(nextSessionIdFromMeta);
+        }
+      };
+
+      const onDeltaHandler = (delta: string) => {
+        streamedReply += delta;
+        setAssistantReply((current) => current + delta);
+        if (statusRef.current === "processing") {
+          setStatus("speaking");
+        }
+        queueSpeechText(delta);
+      };
+
+      const onFinalHandler = (payload: WorkflowStreamPayload) => {
+        streamCompleteRef.current = true;
+        const finalReply = `${payload.response || streamedReply}`.trim();
+        const trailingText =
+          finalReply.startsWith(streamedReply) && finalReply.length > streamedReply.length
+            ? finalReply.slice(streamedReply.length)
+            : "";
+
+        if (trailingText) {
+          streamedReply = finalReply;
+          setAssistantReply((current) => current + trailingText);
+          queueSpeechText(trailingText, true);
+        } else {
+          setAssistantReply(finalReply);
+          queueSpeechText("", true);
+        }
+      };
+
+      const { assistantReply: assistantText, sessionId: nextSessionId, tokenUsage: nextTokenUsage } =
+        await streamRequest();
+
+      activeRequestAbortRef.current = null;
+      if (nextSessionId) {
+        setSessionId(nextSessionId);
+      }
+      setTokenUsage(nextTokenUsage);
+      setAttachments([]);
+      setAssistantReply(assistantText);
+      if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
+        if (continuousConversationRef.current && !manualStopRef.current) {
+          await resumeListeningAfterSpeech();
+        }
+      }
+    } catch (error) {
+      activeRequestAbortRef.current = null;
+      streamCompleteRef.current = true;
+      if (abortController.signal.aborted) {
+        return;
+      }
+      setStatus("error");
+      setErrorMessage(
+        getErrorMessage(error, "The app could not get a response from the assistant.")
+      );
+    }
+  };
+
+
+
+
+
+
   const handleResetConversation = async () => {
-    await deleteConversationSession(sessionId);
+    continuousConversationRef.current = false;
+    manualStopRef.current = true;
+    await cancelActiveAssistantOutput();
+    await deleteConversationSession(sessionIdRef.current);
     setSessionId("");
     setTranscript("");
     setAssistantReply("");
@@ -413,18 +574,82 @@ export default function MiniTalkie() {
       return;
     }
 
+    const abortController = new AbortController();
     try {
       setUploadBusy(true);
       setStatus("processing");
       setErrorMessage("");
+      resetSpeechQueue();
+      setAssistantReply("");
+      activeRequestAbortRef.current = abortController;
+      let streamedReply = "";
+
+      const streamRequest = async () => {
+        try {
+          return await requestAssistantReplyWebSocket(
+            "Please use the attached files to help with my current service request.",
+            sessionIdRef.current,
+            attachments,
+            {
+              signal: abortController.signal,
+              onMeta: sendOnMetaHandler,
+              onDelta: sendOnDeltaHandler,
+              onFinal: sendOnFinalHandler,
+            }
+          );
+        } catch {
+          return requestAssistantReplyStream(
+            "Please use the attached files to help with my current service request.",
+            sessionIdRef.current,
+            attachments,
+            {
+              signal: abortController.signal,
+              onMeta: sendOnMetaHandler,
+              onDelta: sendOnDeltaHandler,
+              onFinal: sendOnFinalHandler,
+            }
+          );
+        }
+      };
+
+      const sendOnMetaHandler = (payload: WorkflowStreamPayload) => {
+        const nextSessionIdFromMeta = `${payload.workflow_session_id || payload.session_id || ""}`.trim();
+        if (nextSessionIdFromMeta) {
+          setSessionId(nextSessionIdFromMeta);
+        }
+      };
+
+      const sendOnDeltaHandler = (delta: string) => {
+        streamedReply += delta;
+        setAssistantReply((current) => current + delta);
+        if (statusRef.current === "processing") {
+          setStatus("speaking");
+        }
+        queueSpeechText(delta);
+      };
+
+      const sendOnFinalHandler = (payload: WorkflowStreamPayload) => {
+        streamCompleteRef.current = true;
+        const finalReply = `${payload.response || streamedReply}`.trim();
+        const trailingText =
+          finalReply.startsWith(streamedReply) && finalReply.length > streamedReply.length
+            ? finalReply.slice(streamedReply.length)
+            : "";
+
+        if (trailingText) {
+          streamedReply = finalReply;
+          setAssistantReply((current) => current + trailingText);
+          queueSpeechText(trailingText, true);
+        } else {
+          setAssistantReply(finalReply);
+          queueSpeechText("", true);
+        }
+      };
 
       const { assistantReply: assistantText, sessionId: nextSessionId, tokenUsage: nextTokenUsage } =
-        await requestAssistantReply(
-          "Please use the attached files to help with my current service request.",
-          sessionId,
-          attachments
-        );
+        await streamRequest();
 
+      activeRequestAbortRef.current = null;
       if (nextSessionId) {
         setSessionId(nextSessionId);
       }
@@ -432,20 +657,17 @@ export default function MiniTalkie() {
 
       setAttachments([]);
       setAssistantReply(assistantText);
-      setStatus("speaking");
-      await Speech.stop();
-
-      Speech.speak(assistantText, {
-        language: selectedLanguage,
-        voice: selectedVoiceId || undefined,
-        onDone: () => setStatus("ready"),
-        onStopped: () => setStatus("ready"),
-        onError: () => {
-          setStatus("error");
-          setErrorMessage("The device voice could not play back the assistant response.");
-        },
-      });
+      if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
+        if (continuousConversationRef.current && !manualStopRef.current) {
+          await resumeListeningAfterSpeech();
+        }
+      }
     } catch (error) {
+      activeRequestAbortRef.current = null;
+      streamCompleteRef.current = true;
+      if (abortController.signal.aborted) {
+        return;
+      }
       setStatus("error");
       setErrorMessage(getErrorMessage(error, "The app could not upload the file."));
     } finally {
@@ -458,10 +680,6 @@ export default function MiniTalkie() {
   };
 
   const liveText = partialTranscript || transcript;
-  const buttonDisabled =
-    UNSUPPORTED_PLATFORM ||
-    status === "checking" ||
-    status === "listening";
   const displayReply = assistantReply.trim().length > 0;
   const panelLabel = displayReply ? "Assistant Replied" : "You Said";
   const panelText = displayReply
@@ -472,6 +690,128 @@ export default function MiniTalkie() {
   const voiceLabel = selectedVoice
     ? `${selectedVoice.name} (${selectedVoice.quality})`
     : "System default";
+
+  const resetSpeechQueue = () => {
+    speechQueueRef.current = [];
+    speechBufferRef.current = "";
+    isSpeakingChunkRef.current = false;
+    streamCompleteRef.current = false;
+  };
+
+  const drainSpeechQueue = () => {
+    if (isSpeakingChunkRef.current) {
+      return;
+    }
+
+    let nextChunk = "";
+    while (speechQueueRef.current.length > 0 && !nextChunk) {
+      nextChunk = prepareSpeechChunk(
+        speechQueueRef.current.shift()?.trim() || ""
+      );
+    }
+
+    if (!nextChunk) {
+      if (streamCompleteRef.current && statusRef.current !== "error") {
+        void resumeListeningAfterSpeech();
+      }
+      return;
+    }
+
+    isSpeakingChunkRef.current = true;
+
+    if (!aecAvailableRef.current) {
+      ExpoSpeechRecognitionModule.abort();
+      clearSilenceTimer();
+    }
+
+    setStatus("speaking");
+
+    Speech.speak(nextChunk, {
+      language: selectedLanguage,
+      voice: selectedVoiceId || undefined,
+      onDone: () => {
+        isSpeakingChunkRef.current = false;
+        setTimeout(() => {
+          drainSpeechQueue();
+        }, 0);
+      },
+      onStopped: () => {
+        isSpeakingChunkRef.current = false;
+        if (isBargeInProgressRef.current) {
+          isBargeInProgressRef.current = false;
+          return;
+        }
+        if (speechQueueRef.current.length > 0) {
+          setTimeout(() => {
+            drainSpeechQueue();
+          }, 0);
+          return;
+        }
+        if (streamCompleteRef.current && statusRef.current !== "error") {
+          if (manualStopRef.current || !continuousConversationRef.current) {
+            return;
+          }
+          void resumeListeningAfterSpeech();
+        }
+      },
+      onError: () => {
+        isSpeakingChunkRef.current = false;
+        setStatus("error");
+        setErrorMessage("The device voice could not play back the assistant response.");
+      },
+    });
+  };
+
+  const queueSpeechText = (text: string, force = false) => {
+    const nextText = sanitizeTextForSpeech(text);
+    if (!nextText) {
+      if (force) {
+        const { speakableChunks, remaining } = splitSpeakableChunks(
+          speechBufferRef.current,
+          true
+        );
+        speechBufferRef.current = remaining;
+        if (speakableChunks.length) {
+          speechQueueRef.current.push(...speakableChunks);
+          drainSpeechQueue();
+        }
+      }
+      return;
+    }
+
+    speechBufferRef.current += nextText;
+    const { speakableChunks, remaining } = splitSpeakableChunks(
+      speechBufferRef.current,
+      force
+    );
+    speechBufferRef.current = remaining;
+
+    if (speakableChunks.length) {
+      speechQueueRef.current.push(...speakableChunks);
+      drainSpeechQueue();
+    }
+  };
+
+  const sendAbortSignal = () => {
+    const currentSessionId = sessionIdRef.current.trim();
+    if (!currentSessionId) {
+      return;
+    }
+    fetch(`${API_URL}/workflows/chat/abort`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workflow_session_id: currentSessionId }),
+    }).catch(() => undefined);
+  };
+
+  const cancelActiveAssistantOutput = async () => {
+    activeRequestAbortRef.current?.abort();
+    activeRequestAbortRef.current = null;
+    clearSilenceTimer();
+    isBargeInProgressRef.current = false;
+    resetSpeechQueue();
+    await Speech.stop().catch(() => undefined);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -578,32 +918,24 @@ export default function MiniTalkie() {
               nestedScrollEnabled
               showsVerticalScrollIndicator={displayReply}
             >
-              <Text style={displayReply ? styles.replyText : styles.transcriptText}>
-                {panelText}
-              </Text>
+              {displayReply ? (
+                <Animated.Text style={[styles.replyText, { opacity: fadeAnim }]}>
+                  {panelText}
+                </Animated.Text>
+              ) : (
+                <Text style={styles.transcriptText}>{panelText}</Text>
+              )}
             </ScrollView>
           </View>
 
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-          <Pressable
-            accessibilityRole="button"
-            disabled={buttonDisabled}
-            onPress={() => void handleMainButtonPress()}
-            style={({ pressed }) => [
-              styles.button,
-              buttonDisabled ? styles.buttonDisabled : null,
-              pressed && !buttonDisabled ? styles.buttonPressed : null,
-            ]}
-          >
-            {status === "checking" ? (
-              <ActivityIndicator color="#f4efe6" />
-            ) : (
-              <Text style={styles.buttonText}>{getButtonLabel(status)}</Text>
-            )}
-          </Pressable>
-
-          <Text style={styles.statusText}>{getStatusMessage(status)}</Text>
+          <View style={styles.stateContainer}>
+            {status === "checking" || status === "processing" ? (
+              <ActivityIndicator size="large" color="#0f3d91" />
+            ) : null}
+            <Text style={styles.stateMessage}>{getStatusMessage(status)}</Text>
+          </View>
         </View>
       </ScrollView>
 
@@ -746,6 +1078,8 @@ function formatRecognitionError(event: ExpoSpeechRecognitionErrorEvent) {
   return `Speech recognition failed: ${event.message}`;
 }
 
+
+
 function getUnavailableMessage() {
   if (Platform.OS !== "android") {
     return "Speech recognition is not available on this device.";
@@ -811,34 +1145,22 @@ function formatLanguageLabel(language: string) {
   return language.replace(/_/g, "-");
 }
 
-function getButtonLabel(status: Status) {
-  if (status === "listening") {
-    return "Listening...";
-  }
-
-  if (status === "speaking") {
-    return "Stop Speaking";
-  }
-
-  return "Tap To Speak";
-}
-
 function getStatusMessage(status: Status) {
   switch (status) {
     case "checking":
-      return "Preparing the recognizer.";
+      return "Initializing...";
     case "ready":
-      return "Ready for the next prompt.";
+      return "Ready to listen";
     case "listening":
-      return "Listening until you stop speaking.";
+      return "Listening...";
     case "processing":
-      return "Sending the prompt to the assistant.";
+      return "Thinking...";
     case "speaking":
-      return "Speaking the assistant response.";
+      return "Speaking";
     case "error":
-      return "The request could not be completed.";
+      return "Something went wrong";
     default:
-      return "Waiting.";
+      return "";
   }
 }
 
@@ -850,7 +1172,7 @@ async function requestAssistantReply(
   const requestPrompt = buildPrompt(prompt);
   const response = attachments.length
     ? await sendMultipartRequest(requestPrompt, sessionId, attachments)
-    : await fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/chat`, {
+    : await fetch(`${API_URL}/workflows/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -865,6 +1187,8 @@ async function requestAssistantReply(
     | {
         workflow_session_id?: string;
         session_id?: string;
+        workflow_id?: string;
+        workflow_title?: string;
         response?: string;
         detail?: string;
         token_usage?: Partial<TokenUsage>;
@@ -885,6 +1209,224 @@ async function requestAssistantReply(
     sessionId: payload?.workflow_session_id?.trim() || payload?.session_id?.trim() || "",
     tokenUsage: normalizeTokenUsage(payload?.token_usage),
   };
+}
+
+type WorkflowStreamPayload = {
+  workflow_session_id?: string;
+  session_id?: string;
+  workflow_id?: string;
+  workflow_title?: string;
+  response?: string;
+  text?: string;
+  detail?: string;
+  token_usage?: Partial<TokenUsage>;
+};
+
+type WorkflowStreamOptions = {
+  signal?: AbortSignal;
+  onMeta?: (payload: WorkflowStreamPayload) => void;
+  onDelta?: (text: string) => void;
+  onFinal?: (payload: WorkflowStreamPayload) => void;
+};
+
+async function requestAssistantReplyStream(
+  prompt: string,
+  sessionId?: string,
+  attachments: Attachment[] = [],
+  options: WorkflowStreamOptions = {}
+) {
+  const requestPrompt = buildPrompt(prompt);
+  const response = attachments.length
+    ? await sendMultipartStreamRequest(requestPrompt, sessionId, attachments, options.signal)
+    : await fetch(`${API_URL}/workflows/chat/stream`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          prompt: requestPrompt,
+          workflow_session_id: sessionId || undefined,
+        }),
+        signal: options.signal,
+      });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as WorkflowStreamPayload | null;
+    throw new Error(payload?.detail || "The backend returned an error.");
+  }
+
+  if (!response.body || typeof response.body.getReader !== "function") {
+    const fallback = await requestAssistantReply(prompt, sessionId, attachments);
+    const fallbackPayload: WorkflowStreamPayload = {
+      workflow_session_id: fallback.sessionId,
+      response: fallback.assistantReply,
+      token_usage: fallback.tokenUsage,
+    };
+    options.onMeta?.(fallbackPayload);
+    options.onFinal?.(fallbackPayload);
+    return fallback;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let finalPayload: WorkflowStreamPayload | null = null;
+  let streamedReply = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    let boundaryIndex = buffer.indexOf("\n\n");
+
+    while (boundaryIndex >= 0) {
+      const rawEvent = buffer.slice(0, boundaryIndex);
+      buffer = buffer.slice(boundaryIndex + 2);
+      boundaryIndex = buffer.indexOf("\n\n");
+
+      const parsedEvent = parseSseEvent(rawEvent);
+      if (!parsedEvent) {
+        continue;
+      }
+
+      if (parsedEvent.event === "meta") {
+        options.onMeta?.(parsedEvent.data);
+        continue;
+      }
+
+      if (parsedEvent.event === "delta") {
+        const delta = `${parsedEvent.data?.text || ""}`;
+        if (delta) {
+          streamedReply += delta;
+          options.onDelta?.(delta);
+        }
+        continue;
+      }
+
+      if (parsedEvent.event === "final") {
+        finalPayload = parsedEvent.data;
+        options.onFinal?.(parsedEvent.data);
+        continue;
+      }
+
+      if (parsedEvent.event === "error") {
+        throw new Error(parsedEvent.data?.detail || "The backend stream failed.");
+      }
+    }
+  }
+
+  if (!finalPayload) {
+    throw new Error("The assistant stream ended without a final response.");
+  }
+
+  const assistantReply = `${finalPayload.response || streamedReply}`.trim();
+  if (!assistantReply) {
+    throw new Error("The assistant returned an empty response.");
+  }
+
+  return {
+    assistantReply,
+    sessionId:
+      `${finalPayload.workflow_session_id || finalPayload.session_id || ""}`.trim(),
+    tokenUsage: normalizeTokenUsage(finalPayload.token_usage),
+  };
+}
+
+async function requestAssistantReplyWebSocket(
+  prompt: string,
+  sessionId?: string,
+  attachments: Attachment[] = [],
+  options: WorkflowStreamOptions = {}
+) {
+  if (attachments.length > 0) {
+    return requestAssistantReplyStream(prompt, sessionId, attachments, options);
+  }
+
+  const wsUrl = `${getWebSocketUrl()}/workflows/chat/ws`;
+  const ws = new WebSocket(wsUrl);
+  let streamedReply = "";
+  let finalPayload: WorkflowStreamPayload | null = null;
+
+  return new Promise<{
+    assistantReply: string;
+    sessionId: string;
+    tokenUsage: TokenUsage;
+  }>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      ws.close();
+      reject(new Error("WebSocket connection timed out."));
+    }, 10000);
+
+    ws.onopen = () => {
+      clearTimeout(timeout);
+      ws.send(
+        JSON.stringify({
+          prompt: buildPrompt(prompt),
+          workflow_session_id: sessionId || undefined,
+        })
+      );
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg: Record<string, unknown> = JSON.parse(event.data);
+        const msgEvent = String(msg.event || "");
+        if (msgEvent === "meta") {
+          options.onMeta?.(msg as unknown as WorkflowStreamPayload);
+        } else if (msgEvent === "delta") {
+          const delta = String(msg.text || "");
+          if (delta) {
+            streamedReply += delta;
+            options.onDelta?.(delta);
+          }
+        } else if (msgEvent === "final") {
+          finalPayload = msg as unknown as WorkflowStreamPayload;
+          options.onFinal?.(finalPayload);
+          ws.close();
+        } else if (msgEvent === "error") {
+          ws.close();
+          reject(new Error(String(msg.detail || "WebSocket stream failed.")));
+        }
+      } catch {
+        // ignore malformed messages
+      }
+    };
+
+    ws.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error("WebSocket connection error."));
+    };
+
+    ws.onclose = () => {
+      clearTimeout(timeout);
+      if (finalPayload) {
+        const assistantReply = `${finalPayload.response || streamedReply}`.trim();
+        if (!assistantReply) {
+          reject(new Error("The assistant returned an empty response."));
+          return;
+        }
+        resolve({
+          assistantReply,
+          sessionId:
+            `${finalPayload.workflow_session_id || finalPayload.session_id || ""}`.trim(),
+          tokenUsage: normalizeTokenUsage(finalPayload.token_usage),
+        });
+      } else if (!streamedReply) {
+        reject(new Error("WebSocket closed without a response."));
+      }
+    };
+
+    if (options.signal) {
+      options.signal.addEventListener("abort", () => {
+        ws.close();
+        reject(new Error("Request was aborted."));
+      });
+    }
+  });
 }
 
 function normalizeTokenUsage(tokenUsage?: Partial<TokenUsage> | null): TokenUsage {
@@ -919,9 +1461,40 @@ async function sendMultipartRequest(
     } as never);
   });
 
-  return fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/chat`, {
+  return fetch(`${API_URL}/workflows/chat`, {
     method: "POST",
     body: formData,
+  });
+}
+
+async function sendMultipartStreamRequest(
+  prompt: string,
+  sessionId: string | undefined,
+  attachments: Attachment[],
+  signal?: AbortSignal
+) {
+  const formData = new FormData();
+  formData.append("prompt", prompt);
+
+  if (sessionId?.trim()) {
+    formData.append("workflow_session_id", sessionId.trim());
+  }
+
+  attachments.forEach((attachment) => {
+    formData.append("file", {
+      uri: attachment.uri,
+      name: attachment.name,
+      type: attachment.type,
+    } as never);
+  });
+
+  return fetch(`${API_URL}/workflows/chat/stream`, {
+    method: "POST",
+    headers: {
+      Accept: "text/event-stream",
+    },
+    body: formData,
+    signal,
   });
 }
 
@@ -932,7 +1505,7 @@ async function deleteConversationSession(sessionId: string) {
   }
 
   try {
-    await fetch(`${API_URL}/workflows/${encodeURIComponent(WORKFLOW_ID)}/sessions/${encodeURIComponent(trimmedSessionId)}`, {
+    await fetch(`${API_URL}/workflows/sessions/${encodeURIComponent(trimmedSessionId)}`, {
       method: "DELETE",
     });
   } catch {
@@ -949,6 +1522,113 @@ function buildPrompt(userPrompt: string) {
   }
 
   return `${basePrompt}\n\nUser prompt:\n${cleanedUserPrompt}`;
+}
+
+function parseSseEvent(rawEvent: string) {
+  const trimmed = rawEvent.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const lines = trimmed.split(/\r?\n/);
+  let event = "message";
+  const dataLines: string[] = [];
+
+  lines.forEach((line) => {
+    if (line.startsWith("event:")) {
+      event = line.slice(6).trim() || "message";
+      return;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice(5).trimStart());
+    }
+  });
+
+  const dataText = dataLines.join("\n");
+  if (!dataText) {
+    return null;
+  }
+
+  try {
+    return {
+      event,
+      data: JSON.parse(dataText) as WorkflowStreamPayload,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function splitSpeakableChunks(text: string, force = false) {
+  const normalized = text.replace(/\s+/g, " ");
+  if (!normalized.trim()) {
+    return { speakableChunks: [], remaining: "" };
+  }
+
+  const speakableChunks: string[] = [];
+  let cursor = 0;
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    if (/[.!?]\s|[.!?]$/.test(normalized.slice(i, i + 2))) {
+      const chunk = normalized.slice(cursor, i + 1).trim();
+      if (chunk) {
+        speakableChunks.push(chunk);
+      }
+      cursor = i + 1;
+    }
+  }
+
+  let remaining = normalized.slice(cursor).trimStart();
+  if (force && remaining.trim()) {
+    speakableChunks.push(remaining.trim());
+    remaining = "";
+  } else if (!force && remaining.length >= 140) {
+    const breakpoint = remaining.lastIndexOf(" ", 140);
+    const chunk = remaining.slice(0, breakpoint > 0 ? breakpoint : 140).trim();
+    if (chunk) {
+      speakableChunks.push(chunk);
+      remaining = remaining.slice(chunk.length).trimStart();
+    }
+  }
+
+  return { speakableChunks, remaining };
+}
+
+function sanitizeTextForSpeech(text: string) {
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .replace(/\r/g, "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*[-*•]\s+/gm, "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/~/g, "")
+    .replace(/[|]/g, " ")
+    .replace(/\s*:\s*/g, ", ")
+    .replace(/\n{2,}/g, ". ")
+    .replace(/\n/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function prepareSpeechChunk(text: string) {
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .replace(/[.?!]+/g, " ")
+    .replace(/[,;:]+/g, ", ")
+    .replace(/[()[\]{}"']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function compressImage(uri: string) {
@@ -993,13 +1673,11 @@ function getBackendUrl() {
   return host ? defaultUrl : defaultUrl;
 }
 
-function getWorkflowId() {
-  const explicitId = process.env.EXPO_PUBLIC_WORKFLOW_ID?.trim();
-  if (explicitId) {
-    return explicitId;
-  }
-
-  return appConfig.mobile?.workflowId?.trim() || "us_nonimmigrant_visa";
+function getWebSocketUrl() {
+  const httpUrl = getBackendUrl();
+  return httpUrl.replace(/^https?:\/\//, (match) =>
+    match === "https://" ? "wss://" : "ws://"
+  );
 }
 
 const styles = StyleSheet.create({
@@ -1221,30 +1899,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  button: {
-    minHeight: 54,
-    borderRadius: 999,
-    backgroundColor: "#0f3d91",
+  stateContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingVertical: 32,
+    gap: 12,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  statusText: {
-    color: "#34527f",
+  stateMessage: {
+    color: "#0f3d91",
+    fontSize: 20,
+    fontWeight: "700",
     textAlign: "center",
-    fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 28,
   },
   modalBackdrop: {
     flex: 1,
