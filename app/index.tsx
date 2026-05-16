@@ -7,21 +7,21 @@ import * as ImagePicker from "expo-image-picker";
 import type { Voice } from "expo-speech";
 import * as Speech from "expo-speech";
 import {
-  ExpoSpeechRecognitionErrorEvent,
-  ExpoSpeechRecognitionModule,
-  ExpoSpeechRecognitionResultEvent,
-  useSpeechRecognitionEvent,
+    ExpoSpeechRecognitionErrorEvent,
+    ExpoSpeechRecognitionModule,
+    ExpoSpeechRecognitionResultEvent,
+    useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
+    Animated,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import appConfig from "../config.json";
@@ -85,6 +85,7 @@ export default function MiniTalkie() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(EMPTY_TOKEN_USAGE);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
   const finalTranscriptRef = useRef("");
   const shouldSpeakOnEndRef = useRef(false);
@@ -103,6 +104,8 @@ export default function MiniTalkie() {
   const latestTranscriptRef = useRef("");
   const aecAvailableRef = useRef(false);
   const lastNetworkRestartRef = useRef(0);
+  const requestStartRef = useRef<number | null>(null);
+  const firstChunkSeenRef = useRef(false);
   const barScales = useRef(
     Array.from({ length: WAVE_BAR_COUNT }, () => new Animated.Value(0.2))
   ).current;
@@ -441,6 +444,9 @@ export default function MiniTalkie() {
       resetSpeechQueue();
       setAssistantReply("");
       streamCompleteRef.current = false;
+      requestStartRef.current = Date.now();
+      firstChunkSeenRef.current = false;
+      setLatencyMs(null);
       addUserMessage(spokenText);
 
       if (CHAT_MODE === "main") {
@@ -458,6 +464,9 @@ export default function MiniTalkie() {
         setTokenUsage(nextTokenUsage);
         setAttachments([]);
         setAssistantReply(assistantText);
+        if (requestStartRef.current) {
+          setLatencyMs(Date.now() - requestStartRef.current);
+        }
         addAssistantMessage(assistantText);
         queueSpeechText(assistantText, true);
         if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
@@ -498,6 +507,10 @@ export default function MiniTalkie() {
       const onDeltaHandler = (delta: string) => {
         streamedReply += delta;
         setAssistantReply((current) => current + delta);
+        if (!firstChunkSeenRef.current && requestStartRef.current) {
+          firstChunkSeenRef.current = true;
+          setLatencyMs(Date.now() - requestStartRef.current);
+        }
         if (statusRef.current === "processing") {
           setStatus("speaking");
         }
@@ -515,9 +528,17 @@ export default function MiniTalkie() {
         if (trailingText) {
           streamedReply = finalReply;
           setAssistantReply((current) => current + trailingText);
+          if (!firstChunkSeenRef.current && requestStartRef.current) {
+            firstChunkSeenRef.current = true;
+            setLatencyMs(Date.now() - requestStartRef.current);
+          }
           queueSpeechText(trailingText, true);
         } else {
           setAssistantReply(finalReply);
+          if (!firstChunkSeenRef.current && requestStartRef.current) {
+            firstChunkSeenRef.current = true;
+            setLatencyMs(Date.now() - requestStartRef.current);
+          }
           queueSpeechText("", true);
         }
       };
@@ -544,6 +565,7 @@ export default function MiniTalkie() {
       if (abortController.signal.aborted) {
         return;
       }
+      setLatencyMs(null);
       setStatus("error");
       setErrorMessage(
         getErrorMessage(error, "The app could not get a response from the assistant.")
@@ -1082,6 +1104,10 @@ export default function MiniTalkie() {
               <Text style={styles.metaValue}>
                 {formatTokenUsage(tokenUsage)}
               </Text>
+              <Text style={styles.metaLabel}>Latency</Text>
+              <Text style={styles.metaValue}>
+                {formatLatency(latencyMs)}
+              </Text>
             </View>
             <View style={styles.uploadActions}>
               <Pressable
@@ -1451,6 +1477,13 @@ function getStatusMessage(status: Status) {
     default:
       return "";
   }
+}
+
+function formatLatency(latencyMs: number | null) {
+  if (latencyMs === null) {
+    return "--";
+  }
+  return `${latencyMs} ms`;
 }
 
 async function requestAssistantReply(
