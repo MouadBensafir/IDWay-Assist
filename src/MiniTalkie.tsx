@@ -1,8 +1,14 @@
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMiniTalkieLogic, type Status } from "./MiniTalkie.logic";
 import SelectionModal from "./components/SelectionModal";
-import SelectorField from "./components/SelectorField";
+
+const ASSISTANT_CARD_HEIGHT = 150;
+const BOTTOM_ACTIONS_HEIGHT = 100;
+const BOTTOM_ACTIONS_OFFSET = 16;
+const COLLECTED_OFFSET = BOTTOM_ACTIONS_HEIGHT + BOTTOM_ACTIONS_OFFSET + 8;
 
 export default function MiniTalkie() {
   const {
@@ -43,120 +49,43 @@ export default function MiniTalkie() {
     toggleMicMute,
   } = useMiniTalkieLogic();
 
+  const [collectedOpen, setCollectedOpen] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setElapsedSeconds((current) => current + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [sessionId]);
+
+  const callStatus = getCallStatus(status);
   const waveStyle = getWaveStyle(status);
+  const elapsedLabel = formatElapsed(elapsedSeconds);
+  const collectedEntries = useMemo(
+    () => parseCollectedEntries(collectedDataText),
+    [collectedDataText]
+  );
+  const collectedCount = collectedEntries.length;
+  const hasCollectedData = collectedCount > 0;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.screen}>
         <View style={styles.container}>
-          <View style={styles.controlsCard}>
-            <Text style={styles.sectionLabel}>Speech Settings</Text>
-            <SelectorField
-              label="Language"
-              value={languageLabel}
-              disabled={languageOptions.length === 0}
-              onPress={openLanguageSelector}
-            />
-            <SelectorField
-              label="Voice"
-              value={voiceLabel}
-              disabled={voiceSelectorDisabled}
-              onPress={openVoiceSelector}
-            />
-            <View style={styles.callActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={toggleMicMute}
-                style={({ pressed }) => [
-                  styles.muteButton,
-                  isMicMuted ? styles.muteButtonActive : null,
-                  pressed ? styles.muteButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.muteButtonText}>{micToggleLabel}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                disabled={!sessionId}
-                onPress={resetConversation}
-                style={({ pressed }) => [
-                  styles.endCallButton,
-                  !sessionId ? styles.resetButtonDisabled : null,
-                  pressed && sessionId ? styles.endCallButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.endCallButtonText}>End Call</Text>
-              </Pressable>
-            </View>
-            <View style={styles.metaPanel}>
-              <Text style={styles.metaLabel}>Session</Text>
-              <Text style={styles.metaValue}>
-                {sessionId.trim() || "No active session"}
-              </Text>
-              <Text style={styles.metaLabel}>Tokens Used</Text>
-              <Text style={styles.metaValue}>{tokenUsageText}</Text>
-              <Text style={styles.metaLabel}>Latency</Text>
-              <Text style={styles.metaValue}>{latencyText}</Text>
-            </View>
-            <View style={styles.uploadActions}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={takePhoto}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Take Photo</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={pickFiles}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed ? styles.secondaryButtonPressed : null,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>Upload File</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              disabled={!attachments.length || uploadBusy}
-              onPress={sendAttachments}
-              style={({ pressed }) => [
-                styles.uploadSendButton,
-                !attachments.length || uploadBusy ? styles.resetButtonDisabled : null,
-                pressed && attachments.length && !uploadBusy
-                  ? styles.resetButtonPressed
-                  : null,
-              ]}
-            >
-              <Text style={styles.uploadSendButtonText}>
-                {uploadBusy ? "Sending..." : "Send Attached Files"}
-              </Text>
-            </Pressable>
-            {attachments.length ? (
-              <View style={styles.attachmentList}>
-                {attachments.map((attachment, index) => (
-                  <Pressable
-                    key={`${attachment.name}-${attachment.uri}`}
-                    onPress={getRemoveAttachmentHandler(index)}
-                    style={({ pressed }) => [
-                      styles.attachmentChip,
-                      pressed ? styles.attachmentChipPressed : null,
-                    ]}
-                  >
-                    <Text style={styles.attachmentChipText}>
-                      {attachment.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
+          <View style={styles.callHeader}>
+            <Text style={styles.callEyebrow}>INGROUPE</Text>
+            <Text style={styles.callTitle}>Assistant</Text>
+            <Text style={styles.callStatus}>{callStatus}</Text>
+            <Text style={styles.callTimer}>{elapsedLabel}</Text>
+          </View>
+
+          <View style={styles.avatarRing}>
+            <MaterialCommunityIcons name="robot-happy-outline" size={42} color="#6dd6ff" />
           </View>
 
           <View style={styles.waveCard}>
@@ -174,55 +103,161 @@ export default function MiniTalkie() {
             </View>
           </View>
 
-          <View style={styles.transcriptCard}>
-            <Text style={styles.sectionLabel}>{panelLabel}</Text>
-            <ScrollView
-              style={styles.panelScroll}
-              contentContainerStyle={styles.panelScrollContent}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={displayReply}
-            >
-              {displayReply ? (
-                <Animated.Text style={[styles.replyText, { opacity: fadeAnim }]}
+          <View style={styles.assistantCard}>
+            {displayReply ? (
+              <>
+                <Text style={styles.assistantLabel}>Assistant</Text>
+                <ScrollView
+                  style={styles.assistantScroll}
+                  contentContainerStyle={styles.assistantScrollContent}
+                  showsVerticalScrollIndicator={false}
                 >
-                  {panelText}
-                </Animated.Text>
-              ) : (
-                <Text style={styles.transcriptText}>{panelText}</Text>
-              )}
-            </ScrollView>
+                  <Animated.Text style={[styles.assistantText, { opacity: fadeAnim }]}>
+                    {panelText}
+                  </Animated.Text>
+                </ScrollView>
+              </>
+            ) : (
+              <>
+                <Text style={styles.userLabel}>You</Text>
+                <ScrollView
+                  style={styles.assistantScroll}
+                  contentContainerStyle={styles.assistantScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={styles.userText}>{panelText}</Text>
+                </ScrollView>
+              </>
+            )}
           </View>
 
-          {collectedDataText ? (
-            <View style={styles.collectedCard}>
-              <Text style={styles.sectionLabel}>Collected Data</Text>
-              <ScrollView
-                style={styles.panelScroll}
-                contentContainerStyle={styles.panelScrollContent}
-                nestedScrollEnabled
-                showsVerticalScrollIndicator
-              >
-                <Text style={styles.collectedText}>{collectedDataText}</Text>
-              </ScrollView>
+          {attachments.length ? (
+            <View style={styles.attachmentRow}>
+              {attachments.map((attachment, index) => (
+                <View
+                  key={`${attachment.name}-${attachment.uri}`}
+                  style={styles.attachmentChip}
+                >
+                  <Ionicons
+                    name={
+                      attachment.type?.startsWith("image/")
+                        ? "image-outline"
+                        : "document-outline"
+                    }
+                    size={14}
+                    color="#6dd6ff"
+                  />
+                  <Text style={styles.attachmentText} numberOfLines={1}>
+                    {attachment.name}
+                  </Text>
+                  <Pressable
+                    style={styles.attachmentRemove}
+                    onPress={getRemoveAttachmentHandler(index)}
+                  >
+                    <Ionicons name="close" size={12} color="#ff9f9f" />
+                  </Pressable>
+                </View>
+              ))}
             </View>
           ) : null}
+        </View>
 
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-          {status === "error" ? (
+        {hasCollectedData ? (
+          <View style={styles.collectedFixed}>
             <Pressable
-              accessibilityRole="button"
-              onPress={retryListening}
-              style={({ pressed }) => [
-                styles.retryButton,
-                pressed ? styles.retryButtonPressed : null,
+              onPress={() => setCollectedOpen((current) => !current)}
+              style={[
+                styles.collectedToggle,
+                collectedOpen ? styles.collectedToggleOpen : null,
               ]}
             >
-              <Text style={styles.retryButtonText}>Try Again</Text>
+              <Text style={styles.collectedTitle}>Collected so far</Text>
+              <View style={styles.collectedMeta}>
+                <View style={styles.collectedBadge}>
+                  <Text style={styles.collectedBadgeText}>{collectedCount}</Text>
+                </View>
+                <Ionicons
+                  name="chevron-down"
+                  size={16}
+                  color="rgba(255,255,255,0.35)"
+                  style={collectedOpen ? styles.collectedChevronOpen : null}
+                />
+              </View>
             </Pressable>
-          ) : null}
+            {collectedOpen ? (
+              <View style={styles.collectedBody}>
+                {collectedEntries.map((entry, index) => (
+                  <View
+                    key={`${entry.key}-${index}`}
+                    style={[
+                      styles.collectedRow,
+                      index === collectedEntries.length - 1
+                        ? styles.collectedRowLast
+                        : null,
+                    ]}
+                  >
+                    <Text style={styles.collectedKey}>{entry.key}</Text>
+                    <Text style={styles.collectedValue}>{entry.value}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={styles.actionRowFixed}>
+          <Pressable style={styles.actionButton} onPress={toggleMicMute}>
+            <View
+              style={[
+                styles.actionIcon,
+                isMicMuted ? styles.actionIconMuted : styles.actionIconDefault,
+              ]}
+            >
+              <Ionicons
+                name={isMicMuted ? "mic-off-outline" : "mic-outline"}
+                size={26}
+                color={isMicMuted ? "#ff6b6b" : "#ffffff"}
+              />
+            </View>
+            <Text style={styles.actionLabel}>
+              {isMicMuted ? "Unmute" : "Hold"}
+            </Text>
+          </Pressable>
+          <Pressable style={styles.actionButton} onPress={pickFiles}>
+            <View style={[styles.actionIcon, styles.actionIconDefault]}>
+              <Ionicons name="attach-outline" size={26} color="#ffffff" />
+            </View>
+            <Text style={styles.actionLabel}>Document</Text>
+          </Pressable>
+          <Pressable style={styles.actionButton} onPress={takePhoto}>
+            <View style={[styles.actionIcon, styles.actionIconDefault]}>
+              <Ionicons name="camera-outline" size={26} color="#ffffff" />
+            </View>
+            <Text style={styles.actionLabel}>Photo</Text>
+          </Pressable>
+          <Pressable
+            style={styles.actionButton}
+            onPress={resetConversation}
+            disabled={!sessionId}
+          >
+            <View
+              style={[
+                styles.actionIcon,
+                styles.actionIconEnd,
+                !sessionId ? styles.actionIconEndDisabled : null,
+              ]}
+            >
+              <Ionicons
+                name="call-outline"
+                size={26}
+                color="#ffffff"
+                style={styles.endCallIcon}
+              />
+            </View>
+            <Text style={styles.endCallLabel}>End call</Text>
+          </Pressable>
         </View>
-      </ScrollView>
+      </View>
 
       <SelectionModal
         title="Choose language"
@@ -263,53 +298,112 @@ function getWaveStyle(status: Status) {
   }
 }
 
+function getCallStatus(status: Status) {
+  switch (status) {
+    case "checking":
+      return "Initializing...";
+    case "ready":
+      return "Ready to listen";
+    case "listening":
+      return "Listening...";
+    case "processing":
+      return "Thinking...";
+    case "speaking":
+      return "Speaking";
+    case "error":
+    default:
+      return "Something went wrong";
+  }
+}
+
+function formatElapsed(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(seconds).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+function parseCollectedEntries(text: string) {
+  if (!text) {
+    return [] as { key: string; value: string }[];
+  }
+
+  return text
+    .split("\n")
+    .map((line) => {
+      const separatorIndex = line.indexOf(":");
+      if (separatorIndex <= 0) {
+        return null;
+      }
+      const key = line.slice(0, separatorIndex).trim();
+      const value = line.slice(separatorIndex + 1).trim();
+      if (!key || !value) {
+        return null;
+      }
+      return { key, value };
+    })
+    .filter((entry): entry is { key: string; value: string } => Boolean(entry));
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#050b16",
+    backgroundColor: "#0a1533",
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 32,
+  screen: {
+    flex: 1,
   },
   container: {
     paddingHorizontal: 20,
     paddingTop: 16,
     gap: 18,
-    flexGrow: 1,
+    flex: 1,
+    paddingBottom: COLLECTED_OFFSET + BOTTOM_ACTIONS_HEIGHT,
   },
-  controlsCard: {
-    padding: 18,
-    borderRadius: 22,
-    backgroundColor: "#0a1f44",
-    borderWidth: 1,
-    borderColor: "rgba(109, 214, 255, 0.15)",
-    gap: 12,
+  callHeader: {
+    alignItems: "center",
+    gap: 4,
   },
-  transcriptCard: {
-    minHeight: 220,
-    padding: 20,
-    borderRadius: 22,
-    backgroundColor: "#0a1f44",
-    borderWidth: 1,
-    borderColor: "rgba(109, 214, 255, 0.2)",
-    gap: 12,
+  callEyebrow: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.4)",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    fontWeight: "700",
   },
-  collectedCard: {
-    minHeight: 140,
-    padding: 20,
-    borderRadius: 22,
-    backgroundColor: "#0a1f44",
-    borderWidth: 1,
-    borderColor: "rgba(109, 214, 255, 0.2)",
-    gap: 12,
+  callTitle: {
+    fontSize: 30,
+    fontWeight: "700",
+    color: "#ffffff",
+    letterSpacing: -0.5,
+  },
+  callStatus: {
+    fontSize: 13,
+    color: "#6dd6ff",
+    fontWeight: "500",
+  },
+  callTimer: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.35)",
+  },
+  avatarRing: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "#1a2f6e",
+    borderWidth: 2,
+    borderColor: "#2d4fba",
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
   },
   waveCard: {
-    height: 72,
-    borderRadius: 16,
-    backgroundColor: "rgba(5, 14, 30, 0.7)",
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(5,14,30,0.7)",
     borderWidth: 1,
-    borderColor: "rgba(109, 214, 255, 0.15)",
+    borderColor: "rgba(109,214,255,0.15)",
     justifyContent: "center",
     overflow: "hidden",
   },
@@ -318,12 +412,12 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "space-between",
     paddingHorizontal: 14,
-    height: 46,
+    height: 36,
   },
   waveBar: {
-    width: 6,
-    height: 36,
-    borderRadius: 8,
+    width: 5,
+    height: 32,
+    borderRadius: 6,
     backgroundColor: "#6dd6ff",
   },
   waveChecking: {
@@ -344,216 +438,194 @@ const styles = StyleSheet.create({
   waveError: {
     backgroundColor: "#ff6b6b",
   },
-  panelScroll: {
+  assistantCard: {
+    height: ASSISTANT_CARD_HEIGHT,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(109,214,255,0.18)",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  assistantLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: "#6dd6ff",
+    marginBottom: 6,
+  },
+  assistantText: {
+    fontSize: 14,
+    color: "#f0f4ff",
+    lineHeight: 21,
+  },
+  assistantScroll: {
     flex: 1,
   },
-  panelScrollContent: {
+  assistantScrollContent: {
     paddingBottom: 4,
   },
-  sectionLabel: {
-    color: "#9fb0c8",
-    fontSize: 11,
+  userLabel: {
+    fontSize: 10,
     fontWeight: "700",
-    letterSpacing: 1.1,
+    letterSpacing: 1,
     textTransform: "uppercase",
-    marginBottom: 8,
+    color: "rgba(255,255,255,0.35)",
+    marginBottom: 6,
   },
-  transcriptText: {
-    color: "#f5f7fb",
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: "500",
-  },
-  replyText: {
-    color: "#f5f7fb",
-    fontSize: 16,
-    lineHeight: 23,
-    fontWeight: "500",
-  },
-  collectedText: {
-    color: "#f5f7fb",
+  userText: {
     fontSize: 14,
-    lineHeight: 22,
-    fontWeight: "500",
+    color: "rgba(255,255,255,0.55)",
+    lineHeight: 21,
   },
-  errorText: {
-    color: "#ff6b6b",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  resetButton: {
-    minHeight: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(197, 203, 213, 0.3)",
-    backgroundColor: "rgba(109, 214, 255, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-  },
-  resetButtonDisabled: {
-    opacity: 0.5,
-  },
-  resetButtonPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  resetButtonText: {
-    color: "#bfe9ff",
-    fontSize: 13,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  metaPanel: {
-    gap: 4,
-    borderWidth: 1,
-    borderColor: "rgba(197, 203, 213, 0.2)",
-    borderRadius: 16,
-    backgroundColor: "rgba(5, 14, 30, 0.6)",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  metaLabel: {
-    color: "#8ea6c3",
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginTop: 2,
-  },
-  metaValue: {
-    color: "#f5f7fb",
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
-  uploadActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  callActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  muteButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(197, 203, 213, 0.3)",
-    backgroundColor: "rgba(5, 14, 30, 0.6)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  muteButtonActive: {
-    borderColor: "rgba(255, 107, 107, 0.65)",
-    backgroundColor: "rgba(255, 107, 107, 0.18)",
-  },
-  muteButtonPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  muteButtonText: {
-    color: "#bfe9ff",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  endCallButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255, 107, 107, 0.7)",
-    backgroundColor: "rgba(255, 107, 107, 0.24)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  endCallButtonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  endCallButtonText: {
-    color: "#ffd3d3",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  secondaryButton: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(197, 203, 213, 0.3)",
-    backgroundColor: "rgba(5, 14, 30, 0.6)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  secondaryButtonPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  secondaryButtonText: {
-    color: "#bfe9ff",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  uploadSendButton: {
-    minHeight: 42,
-    borderRadius: 14,
-    backgroundColor: "#6dd6ff",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-  },
-  uploadSendButtonText: {
-    color: "#0a1f44",
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  attachmentList: {
+  attachmentRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
   attachmentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     borderRadius: 999,
-    backgroundColor: "rgba(109, 214, 255, 0.15)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "rgba(109,214,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: "100%",
   },
-  attachmentChipPressed: {
-    opacity: 0.8,
+  attachmentText: {
+    color: "#c7d6ff",
+    fontSize: 11,
+    fontWeight: "600",
+    maxWidth: 140,
   },
-  attachmentChipText: {
-    color: "#bfe9ff",
-    fontSize: 12,
+  attachmentRemove: {
+    padding: 4,
+  },
+  collectedFixed: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: COLLECTED_OFFSET,
+  },
+  collectedToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(26,47,110,0.55)",
+    borderWidth: 1,
+    borderColor: "rgba(109,214,255,0.18)",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  collectedToggleOpen: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  collectedTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: "rgba(255,255,255,0.45)",
+  },
+  collectedMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  collectedBadge: {
+    backgroundColor: "rgba(109,214,255,0.18)",
+    borderRadius: 99,
+    paddingHorizontal: 9,
+    paddingVertical: 2,
+  },
+  collectedBadgeText: {
+    fontSize: 11,
+    color: "#6dd6ff",
     fontWeight: "700",
   },
-  retryButton: {
-    minHeight: 44,
-    borderRadius: 14,
+  collectedChevronOpen: {
+    transform: [{ rotate: "180deg" }],
+  },
+  collectedBody: {
+    backgroundColor: "rgba(26,47,110,0.4)",
     borderWidth: 1,
-    borderColor: "rgba(255, 107, 107, 0.4)",
-    backgroundColor: "rgba(255, 107, 107, 0.12)",
+    borderColor: "rgba(109,214,255,0.12)",
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    paddingBottom: 4,
+  },
+  collectedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  collectedRowLast: {
+    borderBottomWidth: 0,
+  },
+  collectedKey: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.45)",
+  },
+  collectedValue: {
+    fontSize: 12,
+    color: "#f0f4ff",
+    fontWeight: "600",
+  },
+  actionRowFixed: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: BOTTOM_ACTIONS_OFFSET,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingHorizontal: 10,
+  },
+  actionButton: {
+    alignItems: "center",
+    gap: 7,
+  },
+  actionIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
   },
-  retryButtonPressed: {
-    transform: [{ scale: 0.99 }],
+  actionIconDefault: {
+    backgroundColor: "rgba(255,255,255,0.11)",
   },
-  retryButtonText: {
-    color: "#ffb3b3",
-    fontSize: 13,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  actionIconMuted: {
+    backgroundColor: "rgba(224,32,32,0.22)",
+  },
+  actionIconEnd: {
+    backgroundColor: "#c0392b",
+  },
+  actionIconEndDisabled: {
+    opacity: 0.5,
+  },
+  actionLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: "500",
+  },
+  endCallLabel: {
+    fontSize: 11,
+    color: "#ff9f9f",
+    fontWeight: "500",
+  },
+  endCallIcon: {
+    transform: [{ rotate: "135deg" }],
   },
 });
