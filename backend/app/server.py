@@ -22,6 +22,7 @@ from .form_engine import fetch_field_options
 from .models import DeleteSessionResponse, PromptRequest, PromptResponse
 from .ollama_client import extract_token_usage, ollama_chat_completion
 from .repositories import blueprint_repository, submission_repository
+from .response_format import enforce_collected_data_section
 from .session_store import (
     SessionState,
     cache_documents,
@@ -108,10 +109,11 @@ async def chat(request: Request) -> PromptResponse:
         message={"role": "user", "content": session_user_summary},
     )
 
-    response_text, data_was_saved = await run_assistant_turn(
+        response_text, data_was_saved = await run_assistant_turn(
         session=session,
         user_content=user_content,
     )
+        response_text = enforce_collected_data_section(response_text)
 
     # ── SAFETY NET 2: Post-turn conversation extraction ──────────────────────
     # If the LLM responded with text but never called a SAVE tool, and there are

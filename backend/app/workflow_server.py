@@ -56,6 +56,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from .dynamic_server import run_dynamic_blueprint_turn
 from .form_engine import init_state, _submission_path
 from .repositories import blueprint_repository, submission_repository
+from .response_format import enforce_collected_data_section
 from .session_store import get_or_create_session
 from .workflow import (
     AdvanceWorkflowRequest,
@@ -723,6 +724,7 @@ async def _run_workflow_chat(
                 f"{response_text}\n\nNext step: {next_step.title}. "
                 f"Continue the conversation to proceed."
             )
+    response_text = enforce_collected_data_section(response_text)
 
     return WorkflowChatResponse(
         workflow_session_id=refreshed_state.workflow_session_id,
@@ -837,6 +839,7 @@ async def _run_workflow_chat_stream(
                 f"{response_text}\n\nNext step: {next_step.title}. "
                 f"Continue the conversation to proceed."
             )
+    response_text = enforce_collected_data_section(response_text)
 
     return WorkflowChatResponse(
         workflow_session_id=refreshed_state.workflow_session_id,

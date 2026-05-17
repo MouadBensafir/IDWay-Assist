@@ -79,6 +79,7 @@ export function useMiniTalkieLogic() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage>(EMPTY_TOKEN_USAGE);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [isMicMuted, setIsMicMuted] = useState(false);
+  const [collectedDataText, setCollectedDataText] = useState("");
 
   const finalTranscriptRef = useRef("");
   const shouldSpeakOnEndRef = useRef(false);
@@ -99,6 +100,8 @@ export function useMiniTalkieLogic() {
   const lastNetworkRestartRef = useRef(0);
   const requestStartRef = useRef<number | null>(null);
   const firstChunkSeenRef = useRef(false);
+  const rawAssistantReplyRef = useRef("");
+  const lastSpokenMainLengthRef = useRef(0);
   const barScales = useRef(
     Array.from({ length: WAVE_BAR_COUNT }, () => new Animated.Value(0.2))
   ).current;
@@ -459,6 +462,7 @@ export function useMiniTalkieLogic() {
       activeRequestAbortRef.current = abortController;
       resetSpeechQueue();
       setAssistantReply("");
+      setCollectedDataText("");
       streamCompleteRef.current = false;
       requestStartRef.current = Date.now();
       firstChunkSeenRef.current = false;
@@ -483,12 +487,14 @@ export function useMiniTalkieLogic() {
         }
         setTokenUsage(nextTokenUsage);
         setAttachments([]);
-        setAssistantReply(assistantText);
+        const { mainText, collectedData } = splitCollectedData(assistantText);
+        setAssistantReply(mainText);
+        setCollectedDataText(collectedData);
         if (requestStartRef.current) {
           setLatencyMs(Date.now() - requestStartRef.current);
         }
-        addAssistantMessage(assistantText);
-        queueSpeechText(assistantText, true);
+        addAssistantMessage(mainText);
+        queueSpeechText(mainText, true);
         if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
           if (continuousConversationRef.current && !manualStopRef.current) {
             await resumeListeningAfterSpeech();
@@ -498,6 +504,8 @@ export function useMiniTalkieLogic() {
       }
 
       let streamedReply = "";
+      rawAssistantReplyRef.current = "";
+      lastSpokenMainLengthRef.current = 0;
 
       const onMetaHandler = (payload: WorkflowStreamPayload) => {
         const nextSessionIdFromMeta = `${
@@ -510,7 +518,10 @@ export function useMiniTalkieLogic() {
 
       const onDeltaHandler = (delta: string) => {
         streamedReply += delta;
-        setAssistantReply((current) => current + delta);
+        rawAssistantReplyRef.current += delta;
+        const parsed = splitCollectedData(rawAssistantReplyRef.current);
+        setAssistantReply(parsed.mainText);
+        setCollectedDataText(parsed.collectedData);
         if (!firstChunkSeenRef.current && requestStartRef.current) {
           firstChunkSeenRef.current = true;
           setLatencyMs(Date.now() - requestStartRef.current);
@@ -518,32 +529,36 @@ export function useMiniTalkieLogic() {
         if (statusRef.current === "processing") {
           setStatus("speaking");
         }
-        queueSpeechText(delta);
+        const nextSpeechText = getSafeSpeechDelta(
+          parsed.mainText,
+          lastSpokenMainLengthRef.current,
+          parsed.hasMarker
+        );
+        if (nextSpeechText) {
+          lastSpokenMainLengthRef.current =
+            lastSpokenMainLengthRef.current + nextSpeechText.length;
+          queueSpeechText(nextSpeechText);
+        }
       };
 
       const onFinalHandler = (payload: WorkflowStreamPayload) => {
         streamCompleteRef.current = true;
         const finalReply = `${payload.response || streamedReply}`.trim();
-        const trailingText =
-          finalReply.startsWith(streamedReply) &&
-          finalReply.length > streamedReply.length
-            ? finalReply.slice(streamedReply.length)
-            : "";
-
-        if (trailingText) {
-          streamedReply = finalReply;
-          setAssistantReply((current) => current + trailingText);
-          if (!firstChunkSeenRef.current && requestStartRef.current) {
-            firstChunkSeenRef.current = true;
-            setLatencyMs(Date.now() - requestStartRef.current);
-          }
-          queueSpeechText(trailingText, true);
+        rawAssistantReplyRef.current = finalReply;
+        const parsed = splitCollectedData(finalReply);
+        setAssistantReply(parsed.mainText);
+        setCollectedDataText(parsed.collectedData);
+        if (!firstChunkSeenRef.current && requestStartRef.current) {
+          firstChunkSeenRef.current = true;
+          setLatencyMs(Date.now() - requestStartRef.current);
+        }
+        const remainingSpeech = parsed.mainText.slice(
+          lastSpokenMainLengthRef.current
+        );
+        if (remainingSpeech) {
+          lastSpokenMainLengthRef.current = parsed.mainText.length;
+          queueSpeechText(remainingSpeech, true);
         } else {
-          setAssistantReply(finalReply);
-          if (!firstChunkSeenRef.current && requestStartRef.current) {
-            firstChunkSeenRef.current = true;
-            setLatencyMs(Date.now() - requestStartRef.current);
-          }
           queueSpeechText("", true);
         }
       };
@@ -588,8 +603,10 @@ export function useMiniTalkieLogic() {
       }
       setTokenUsage(nextTokenUsage);
       setAttachments([]);
-      setAssistantReply(assistantText);
-      addAssistantMessage(assistantText);
+      const parsed = splitCollectedData(assistantText);
+      setAssistantReply(parsed.mainText);
+      setCollectedDataText(parsed.collectedData);
+      addAssistantMessage(parsed.mainText);
       if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
         if (continuousConversationRef.current && !manualStopRef.current) {
           await resumeListeningAfterSpeech();
@@ -620,6 +637,7 @@ export function useMiniTalkieLogic() {
     setPartialTranscript("");
     setAttachments([]);
     setTokenUsage(EMPTY_TOKEN_USAGE);
+    setCollectedDataText("");
     finalTranscriptRef.current = "";
     shouldSpeakOnEndRef.current = false;
 
@@ -732,6 +750,7 @@ export function useMiniTalkieLogic() {
       setErrorMessage("");
       resetSpeechQueue();
       setAssistantReply("");
+      setCollectedDataText("");
       activeRequestAbortRef.current = abortController;
       streamCompleteRef.current = false;
 
@@ -761,9 +780,11 @@ export function useMiniTalkieLogic() {
         }
         setTokenUsage(nextTokenUsage);
         setAttachments([]);
-        setAssistantReply(assistantText);
-        addAssistantMessage(assistantText);
-        queueSpeechText(assistantText, true);
+        const parsed = splitCollectedData(assistantText);
+        setAssistantReply(parsed.mainText);
+        setCollectedDataText(parsed.collectedData);
+        addAssistantMessage(parsed.mainText);
+        queueSpeechText(parsed.mainText, true);
         if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
           if (continuousConversationRef.current && !manualStopRef.current) {
             await resumeListeningAfterSpeech();
@@ -773,6 +794,8 @@ export function useMiniTalkieLogic() {
       }
 
       let streamedReply = "";
+      rawAssistantReplyRef.current = "";
+      lastSpokenMainLengthRef.current = 0;
       addUserMessage(
         "Please use the attached files to help with my current service request.",
         attachments.map((attachment) => ({
@@ -793,28 +816,39 @@ export function useMiniTalkieLogic() {
 
       const sendOnDeltaHandler = (delta: string) => {
         streamedReply += delta;
-        setAssistantReply((current) => current + delta);
+        rawAssistantReplyRef.current += delta;
+        const parsed = splitCollectedData(rawAssistantReplyRef.current);
+        setAssistantReply(parsed.mainText);
+        setCollectedDataText(parsed.collectedData);
         if (statusRef.current === "processing") {
           setStatus("speaking");
         }
-        queueSpeechText(delta);
+        const nextSpeechText = getSafeSpeechDelta(
+          parsed.mainText,
+          lastSpokenMainLengthRef.current,
+          parsed.hasMarker
+        );
+        if (nextSpeechText) {
+          lastSpokenMainLengthRef.current =
+            lastSpokenMainLengthRef.current + nextSpeechText.length;
+          queueSpeechText(nextSpeechText);
+        }
       };
 
       const sendOnFinalHandler = (payload: WorkflowStreamPayload) => {
         streamCompleteRef.current = true;
         const finalReply = `${payload.response || streamedReply}`.trim();
-        const trailingText =
-          finalReply.startsWith(streamedReply) &&
-          finalReply.length > streamedReply.length
-            ? finalReply.slice(streamedReply.length)
-            : "";
-
-        if (trailingText) {
-          streamedReply = finalReply;
-          setAssistantReply((current) => current + trailingText);
-          queueSpeechText(trailingText, true);
+        rawAssistantReplyRef.current = finalReply;
+        const parsed = splitCollectedData(finalReply);
+        setAssistantReply(parsed.mainText);
+        setCollectedDataText(parsed.collectedData);
+        const remainingSpeech = parsed.mainText.slice(
+          lastSpokenMainLengthRef.current
+        );
+        if (remainingSpeech) {
+          lastSpokenMainLengthRef.current = parsed.mainText.length;
+          queueSpeechText(remainingSpeech, true);
         } else {
-          setAssistantReply(finalReply);
           queueSpeechText("", true);
         }
       };
@@ -859,8 +893,10 @@ export function useMiniTalkieLogic() {
       }
       setTokenUsage(nextTokenUsage);
       setAttachments([]);
-      setAssistantReply(assistantText);
-      addAssistantMessage(assistantText);
+      const parsed = splitCollectedData(assistantText);
+      setAssistantReply(parsed.mainText);
+      setCollectedDataText(parsed.collectedData);
+      addAssistantMessage(parsed.mainText);
       if (!isSpeakingChunkRef.current && speechQueueRef.current.length === 0) {
         if (continuousConversationRef.current && !manualStopRef.current) {
           await resumeListeningAfterSpeech();
@@ -1197,6 +1233,7 @@ export function useMiniTalkieLogic() {
     activeSelector,
     attachments,
     barScales,
+    collectedDataText,
     displayReply,
     errorMessage,
     fadeAnim,
@@ -1231,6 +1268,44 @@ export function useMiniTalkieLogic() {
     getRemoveAttachmentHandler,
     toggleMicMute,
   };
+}
+
+const COLLECTED_DATA_MARKER = "COLLECTED_DATA:";
+const MARKER_BUFFER_LENGTH = COLLECTED_DATA_MARKER.length;
+
+function splitCollectedData(text: string) {
+  const markerIndex = text.lastIndexOf(COLLECTED_DATA_MARKER);
+  if (markerIndex < 0) {
+    return {
+      mainText: text.trim(),
+      collectedData: "",
+      hasMarker: false,
+    };
+  }
+
+  const mainText = text.slice(0, markerIndex).trimEnd();
+  const collectedData = text
+    .slice(markerIndex + COLLECTED_DATA_MARKER.length)
+    .trim();
+  return {
+    mainText: mainText.trim(),
+    collectedData,
+    hasMarker: true,
+  };
+}
+
+function getSafeSpeechDelta(
+  mainText: string,
+  lastSpokenLength: number,
+  hasMarker: boolean
+) {
+  const safeLength = hasMarker
+    ? mainText.length
+    : Math.max(0, mainText.length - MARKER_BUFFER_LENGTH);
+  if (safeLength <= lastSpokenLength) {
+    return "";
+  }
+  return mainText.slice(lastSpokenLength, safeLength);
 }
 
 function formatRecognitionError(event: ExpoSpeechRecognitionErrorEvent) {

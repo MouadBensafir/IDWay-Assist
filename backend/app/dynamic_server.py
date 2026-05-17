@@ -56,6 +56,7 @@ from .ollama_client import (
     ollama_chat_completion_stream,
 )
 from .repositories import blueprint_repository, submission_repository
+from .response_format import enforce_collected_data_section
 from .session_store import (
     SessionState,
     cache_documents,
@@ -230,6 +231,7 @@ async def run_dynamic_blueprint_turn(
         ctx = prepare_turn(session.session_id, blueprint)
 
     response_text = _build_user_visible_response(blueprint, ctx, response_text)
+    response_text = enforce_collected_data_section(response_text)
     return DynamicChatResponse(
         session_id=session.session_id,
         blueprint_id=blueprint.blueprint_id,

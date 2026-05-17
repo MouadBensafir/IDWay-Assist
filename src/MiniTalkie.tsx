@@ -9,6 +9,7 @@ export default function MiniTalkie() {
     activeSelector,
     attachments,
     barScales,
+    collectedDataText,
     displayReply,
     errorMessage,
     fadeAnim,
@@ -192,6 +193,20 @@ export default function MiniTalkie() {
             </ScrollView>
           </View>
 
+          {collectedDataText ? (
+            <View style={styles.collectedCard}>
+              <Text style={styles.sectionLabel}>Collected Data</Text>
+              <ScrollView
+                style={styles.panelScroll}
+                contentContainerStyle={styles.panelScrollContent}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator
+              >
+                <Text style={styles.collectedText}>{collectedDataText}</Text>
+              </ScrollView>
+            </View>
+          ) : null}
+
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
           {status === "error" ? (
@@ -280,6 +295,15 @@ const styles = StyleSheet.create({
     borderColor: "rgba(109, 214, 255, 0.2)",
     gap: 12,
   },
+  collectedCard: {
+    minHeight: 140,
+    padding: 20,
+    borderRadius: 22,
+    backgroundColor: "#0a1f44",
+    borderWidth: 1,
+    borderColor: "rgba(109, 214, 255, 0.2)",
+    gap: 12,
+  },
   waveCard: {
     height: 72,
     borderRadius: 16,
@@ -344,6 +368,12 @@ const styles = StyleSheet.create({
     color: "#f5f7fb",
     fontSize: 16,
     lineHeight: 23,
+    fontWeight: "500",
+  },
+  collectedText: {
+    color: "#f5f7fb",
+    fontSize: 14,
+    lineHeight: 22,
     fontWeight: "500",
   },
   errorText: {

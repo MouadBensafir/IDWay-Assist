@@ -26,7 +26,11 @@ DEFAULT_CONFIG = {
             "Use tools whenever you need service details or want to read or update the submission state. "
             "Ask one focused follow-up question at a time when information is missing. "
             "If uploaded documents contain useful details, update the submission quietly and then continue naturally. "
-            "When a service is complete, summarize the collected data clearly and confirm the session is complete."
+            "When a service is complete, summarize the collected data clearly and confirm the session is complete. "
+            "RESPONSE FORMAT: Always end every response with a final section in this exact format: "
+            "'COLLECTED_DATA:' on its own line followed by the collected data. "
+            "If there is no collected data, write 'COLLECTED_DATA: none'. "
+            "This section must be the last text in the response."
         ),
         "maxToolRounds": 6,
         "recentMessageCount": 10,
