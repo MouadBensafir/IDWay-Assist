@@ -84,6 +84,7 @@ export function useMiniTalkieLogic() {
   const finalTranscriptRef = useRef("");
   const shouldSpeakOnEndRef = useRef(false);
   const sessionIdRef = useRef("");
+  const attachmentsRef = useRef<Attachment[]>([]);
   const speechQueueRef = useRef<string[]>([]);
   const speechBufferRef = useRef("");
   const isSpeakingChunkRef = useRef(false);
@@ -112,6 +113,10 @@ export function useMiniTalkieLogic() {
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -450,6 +455,7 @@ export function useMiniTalkieLogic() {
 
   const fetchAssistantReply = useCallback(async () => {
     const spokenText = finalTranscriptRef.current.trim();
+    const currentAttachments = attachmentsRef.current;
 
     if (!spokenText) {
       setPartialTranscript("");
@@ -467,7 +473,16 @@ export function useMiniTalkieLogic() {
       requestStartRef.current = Date.now();
       firstChunkSeenRef.current = false;
       setLatencyMs(null);
-      addUserMessage(spokenText);
+      addUserMessage(
+        spokenText,
+        currentAttachments.length
+          ? currentAttachments.map((attachment) => ({
+              name: attachment.name,
+              uri: attachment.uri,
+              type: attachment.type,
+            }))
+          : undefined
+      );
 
       if (CHAT_MODE === "main") {
         const {
@@ -477,7 +492,7 @@ export function useMiniTalkieLogic() {
         } = await requestAssistantReplyMain(
           spokenText,
           sessionIdRef.current,
-          attachments
+          currentAttachments
         );
 
         activeRequestAbortRef.current = null;
@@ -568,7 +583,7 @@ export function useMiniTalkieLogic() {
           return await requestAssistantReplyStream(
             spokenText,
             sessionIdRef.current,
-            attachments,
+            currentAttachments,
             {
               signal: abortController.signal,
               onMeta: onMetaHandler,
@@ -580,7 +595,7 @@ export function useMiniTalkieLogic() {
           return await requestAssistantReplyWebSocket(
             spokenText,
             sessionIdRef.current,
-            attachments,
+            currentAttachments,
             {
               signal: abortController.signal,
               onMeta: onMetaHandler,
