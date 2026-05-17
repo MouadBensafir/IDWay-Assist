@@ -7,10 +7,10 @@ import * as ImagePicker from "expo-image-picker";
 import type { Voice } from "expo-speech";
 import * as Speech from "expo-speech";
 import {
-    ExpoSpeechRecognitionErrorEvent,
-    ExpoSpeechRecognitionModule,
-    ExpoSpeechRecognitionResultEvent,
-    useSpeechRecognitionEvent,
+  ExpoSpeechRecognitionErrorEvent,
+  ExpoSpeechRecognitionModule,
+  ExpoSpeechRecognitionResultEvent,
+  useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Platform } from "react-native";
@@ -1287,9 +1287,14 @@ function splitCollectedData(text: string) {
   const collectedData = text
     .slice(markerIndex + COLLECTED_DATA_MARKER.length)
     .trim();
+  const normalized = collectedData.toLowerCase();
+  const cleanedCollectedData =
+    !collectedData || normalized === "none" || normalized === "none."
+      ? ""
+      : collectedData;
   return {
     mainText: mainText.trim(),
-    collectedData,
+    collectedData: cleanedCollectedData,
     hasMarker: true,
   };
 }

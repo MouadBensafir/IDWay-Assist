@@ -109,11 +109,11 @@ async def chat(request: Request) -> PromptResponse:
         message={"role": "user", "content": session_user_summary},
     )
 
-        response_text, data_was_saved = await run_assistant_turn(
+    response_text, data_was_saved = await run_assistant_turn(
         session=session,
         user_content=user_content,
     )
-        response_text = enforce_collected_data_section(response_text)
+    response_text = enforce_collected_data_section(response_text)
 
     # ── SAFETY NET 2: Post-turn conversation extraction ──────────────────────
     # If the LLM responded with text but never called a SAVE tool, and there are
