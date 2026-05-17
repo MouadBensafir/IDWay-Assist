@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useConversationHistory } from "./context/ConversationContext";
+import { useConversationHistory } from "../src/context/ConversationContext";
 
 export default function ConversationScreen() {
   const { history } = useConversationHistory();

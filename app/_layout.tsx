@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ConversationProvider } from "./context/ConversationContext";
+import { ConversationProvider } from "../src/context/ConversationContext";
 
 export default function RootLayout() {
   return (

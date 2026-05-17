@@ -1,1 +1,1 @@
-export { default } from "./MiniTalkie";
+export { default } from "../src/MiniTalkie";
